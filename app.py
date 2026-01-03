@@ -93,9 +93,13 @@ else:
     temp_income_annual = 0
     temp_income_years = 0
 
-# Market Drawdown Rule
-st.sidebar.subheader("📉 Rebalancing Rules")
-drawdown_trigger = st.sidebar.slider("Drawdown Trigger (no rebalance if exceeded)", min_value=0.0, max_value=0.50, value=0.15, step=0.05, format="%.2f")
+# Bucket Strategy - Defensive Withdrawal Rules
+st.sidebar.subheader("🛡️ Defensive Withdrawal Strategy")
+st.sidebar.markdown("*Withdraw from cash/bonds first during market downturns*")
+defensive_trigger = st.sidebar.slider("Defensive Trigger (market down %)", min_value=0, max_value=50, value=15, step=5, format="%d%%") / 100
+recovery_threshold = st.sidebar.slider("Recovery Threshold (within % of peak)", min_value=0, max_value=20, value=5, step=1, format="%d%%") / 100
+
+st.sidebar.info(f"**Strategy:** If market drops {defensive_trigger*100:.0f}%+ from peak, withdraw defensively (Cash→Bonds→Equities) until market recovers to within {recovery_threshold*100:.0f}% of peak. Otherwise withdraw proportionally and rebalance annually.")
 
 # Run button
 run_simulation = st.sidebar.button("🚀 Run Simulation", type="primary", use_container_width=True)
@@ -115,6 +119,8 @@ if run_simulation and total_allocation == 100:
         years_slow = []
         years_no = []
         
+        defensive_years_count = []  # Track how many years spent in defensive mode
+        
         for sim in range(simulations):
             
             # Initialize portfolio buckets
@@ -126,6 +132,7 @@ if run_simulation and total_allocation == 100:
             market_high = 1.0
             
             y_go = y_slow = y_no = 0
+            defensive_years = 0
             success = True
             
             for year in range(years):
@@ -141,6 +148,19 @@ if run_simulation and total_allocation == 100:
                 
                 market_index *= (1 + equity_r)
                 market_high = max(market_high, market_index)
+                
+                # Calculate current drawdown
+                drawdown = (market_high - market_index) / market_high
+                
+                # Determine if we're in defensive mode
+                in_defensive_mode = drawdown > defensive_trigger
+                
+                # Check if we've recovered enough to exit defensive mode
+                if in_defensive_mode and drawdown < recovery_threshold:
+                    in_defensive_mode = False
+                
+                if in_defensive_mode:
+                    defensive_years += 1
                 
                 # Spending Phase
                 if year < go_go_years:
@@ -171,7 +191,7 @@ if run_simulation and total_allocation == 100:
                 if year < temp_income_years:
                     net_spend = max(net_spend - temp_income_annual, 0)
                 
-                # Withdrawal: proportional across all buckets
+                # Check if we have enough total
                 total = equities + bonds + cash
                 if net_spend >= total:
                     success = False
@@ -179,17 +199,38 @@ if run_simulation and total_allocation == 100:
                     equities = bonds = cash = 0
                     break
                 
-                prop_eq = equities / total
-                prop_bd = bonds / total
-                prop_cash = cash / total
+                # WITHDRAWAL STRATEGY - depends on market conditions
+                if in_defensive_mode:
+                    # Defensive: withdraw from Cash → Bonds → Equities
+                    remaining_need = net_spend
+                    
+                    # Take from cash first
+                    cash_withdrawal = min(remaining_need, cash)
+                    cash -= cash_withdrawal
+                    remaining_need -= cash_withdrawal
+                    
+                    # Take from bonds next
+                    if remaining_need > 0:
+                        bond_withdrawal = min(remaining_need, bonds)
+                        bonds -= bond_withdrawal
+                        remaining_need -= bond_withdrawal
+                    
+                    # Take from equities last
+                    if remaining_need > 0:
+                        equities -= remaining_need
                 
-                equities -= net_spend * prop_eq
-                bonds -= net_spend * prop_bd
-                cash -= net_spend * prop_cash
+                else:
+                    # Normal times: withdraw proportionally
+                    prop_eq = equities / total
+                    prop_bd = bonds / total
+                    prop_cash = cash / total
+                    
+                    equities -= net_spend * prop_eq
+                    bonds -= net_spend * prop_bd
+                    cash -= net_spend * prop_cash
                 
-                # Annual rebalance if market is above drawdown threshold
-                drawdown = (market_high - market_index) / market_high
-                if drawdown < drawdown_trigger:
+                # REBALANCING - only if NOT in defensive mode
+                if not in_defensive_mode:
                     total = equities + bonds + cash
                     equities = total * asset_mix['equities']
                     bonds = total * asset_mix['bonds']
@@ -205,6 +246,7 @@ if run_simulation and total_allocation == 100:
             years_go.append(y_go)
             years_slow.append(y_slow)
             years_no.append(y_no)
+            defensive_years_count.append(defensive_years)
     
     # Calculate results
     final_portfolios = np.array(final_portfolios)
@@ -224,11 +266,8 @@ if run_simulation and total_allocation == 100:
         median_final = np.median(final_portfolios)
         st.metric("Median Final Portfolio", f"${median_final:,.0f}")
     with col4:
-        if failure_years_list:
-            avg_failure_year = np.mean(failure_years_list)
-            st.metric("Avg Failure Year", f"{avg_failure_year:.1f}")
-        else:
-            st.metric("Avg Failure Year", "N/A")
+        avg_defensive_years = np.mean(defensive_years_count)
+        st.metric("Avg Years in Defensive Mode", f"{avg_defensive_years:.1f}")
     
     # Tabs for different views
     tab1, tab2, tab3, tab4 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "📋 Detailed Stats"])
@@ -340,6 +379,11 @@ if run_simulation and total_allocation == 100:
             if has_ss and ss_start_year < years:
                 ss_year1_nominal = ss_monthly * 12 * ((1 + inflation_rate) ** (ss_start_year - 1))
                 st.markdown(f"**Social Security in Year {ss_start_year}** (nominal $): ${ss_year1_nominal:,.0f}")
+            
+            st.markdown("**Defensive Withdrawal Summary**")
+            st.write(f"Average years in defensive mode: {np.mean(defensive_years_count):.1f}")
+            st.write(f"Max years in defensive mode: {np.max(defensive_years_count)}")
+            st.write(f"% of sims that used defensive mode: {100 * np.sum(np.array(defensive_years_count) > 0) / simulations:.1f}%")
         
         with col2:
             st.markdown("**Portfolio Statistics**")
@@ -362,11 +406,18 @@ else:
     - Accounting for variable spending patterns over time
     - Including mortgages, Social Security, and temporary income
     - Modeling realistic market volatility and drawdowns
-    - Showing success probability and failure timing
+    - **Using a defensive bucket strategy during market downturns** to protect against sequence of returns risk
+    
+    **Defensive Withdrawal Strategy:**
+    When markets drop significantly, the simulator switches to defensive mode:
+    - Withdrawals come from Cash → Bonds → Equities (preserving growth assets)
+    - Rebalancing is paused until markets recover
+    - Helps avoid "selling low" during crashes
     
     **How to use:**
     1. Adjust parameters in the left sidebar
-    2. Click "Run Simulation"
-    3. Review results across multiple tabs
-    4. Experiment with different scenarios to test sensitivity
+    2. Set your defensive trigger and recovery thresholds
+    3. Click "Run Simulation"
+    4. Review results across multiple tabs
+    5. Experiment with different scenarios to test sensitivity
     """)
