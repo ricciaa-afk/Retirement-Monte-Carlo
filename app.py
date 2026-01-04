@@ -413,9 +413,9 @@ if run_simulation and total_allocation == 100:
         
         # Tabs for different views
         if enable_guardrails:
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "📋 Detailed Stats", "🤖 AI Analysis Export"])
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         else:
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "📋 Detailed Stats", "🤖 AI Analysis Export"])
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         
         with tab1:
             st.subheader("Final Portfolio Distribution")
