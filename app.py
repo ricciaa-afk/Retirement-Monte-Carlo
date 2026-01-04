@@ -19,8 +19,8 @@ initial_portfolio = st.sidebar.number_input("Initial Portfolio ($)", min_value=0
 
 # Asset Allocation
 st.sidebar.subheader("📈 Asset Allocation (Normal Mode)")
-equity_pct = st.sidebar.slider("Equities (%)", min_value=0, max_value=100, value=60)
-bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=35)
+equity_pct = st.sidebar.slider("Equities (%)", min_value=0, max_value=100, value=80)
+bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=15)
 cash_pct = st.sidebar.slider("Cash (%)", min_value=0, max_value=100, value=5)
 
 total_allocation = equity_pct + bond_pct + cash_pct
@@ -35,15 +35,46 @@ asset_mix = {
 
 # Returns
 st.sidebar.subheader("💰 Expected Returns (Annual)")
-equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.065, step=0.005, format="%.3f")
-equity_vol = st.sidebar.slider("Equity Volatility", min_value=0.0, max_value=0.30, value=0.16, step=0.01, format="%.2f")
+equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.08, step=0.005, format="%.3f")
+equity_vol = st.sidebar.slider("Equity Volatility", min_value=0.0, max_value=0.30, value=0.18, step=0.01, format="%.2f")
 bond_return = st.sidebar.slider("Bond Return", min_value=0.0, max_value=0.15, value=0.03, step=0.005, format="%.3f")
 bond_vol = st.sidebar.slider("Bond Volatility", min_value=0.0, max_value=0.15, value=0.06, step=0.01, format="%.2f")
 cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, value=0.01, step=0.005, format="%.3f")
 inflation_rate = st.sidebar.slider("Inflation Rate", min_value=0.0, max_value=0.10, value=0.02, step=0.005, format="%.3f")
 
+# Tax Drag
+st.sidebar.subheader("💸 Tax Drag by Period")
+st.sidebar.markdown("*Percentage of withdrawals lost to taxes*")
+
+go_go_tax_drag = st.sidebar.slider(
+    "Go-Go Years Tax Drag (%)", 
+    min_value=0, 
+    max_value=30, 
+    value=5, 
+    step=1,
+    help="Early years: pulling from taxable accounts, cap gains treatment"
+) / 100
+
+slow_go_tax_drag = st.sidebar.slider(
+    "Slow-Go Years Tax Drag (%)", 
+    min_value=0, 
+    max_value=30, 
+    value=12, 
+    step=1,
+    help="Middle years: RMDs start, mix of account types"
+) / 100
+
+no_go_tax_drag = st.sidebar.slider(
+    "No-Go Years Tax Drag (%)", 
+    min_value=0, 
+    max_value=30, 
+    value=15, 
+    step=1,
+    help="Later years: higher RMDs, more ordinary income"
+) / 100
+
 # Spending Glidepath
-st.sidebar.subheader("💳 Spending Glidepath (Monthly, Today's $)")
+st.sidebar.subheader("💳 Spending Glidepath (Monthly, After-Tax $)")
 go_go_spend = st.sidebar.number_input("Go-Go Years (Monthly)", min_value=0, max_value=50000, value=11100, step=100)
 go_go_years = st.sidebar.number_input("Go-Go Duration (years)", min_value=0, max_value=50, value=10)
 
@@ -110,7 +141,7 @@ if enable_guardrails:
         "Guardrail Trigger ($)", 
         min_value=0, 
         max_value=10000000, 
-        value=2000000, 
+        value=1500000, 
         step=100000,
         help="If portfolio drops below this, activate guardrails"
     )
@@ -172,6 +203,7 @@ if run_simulation and total_allocation == 100:
             
             defensive_years_count = []
             guardrail_years_count = []
+            total_taxes_paid = []
             
             for sim in range(simulations):
                 
@@ -186,6 +218,7 @@ if run_simulation and total_allocation == 100:
                 y_go = y_slow = y_no = 0
                 defensive_years = 0
                 guardrail_years = 0
+                taxes_paid = 0
                 success = True
                 
                 guardrails_active = False
@@ -236,38 +269,51 @@ if run_simulation and total_allocation == 100:
                     if year < go_go_years:
                         monthly_spend = go_go_spend
                         y_go += 1
+                        current_tax_drag = go_go_tax_drag
                     elif year < (go_go_years + slow_go_years):
                         monthly_spend = slow_go_spend
                         y_slow += 1
+                        current_tax_drag = slow_go_tax_drag
                     else:
                         monthly_spend = no_go_spend
                         y_no += 1
+                        current_tax_drag = no_go_tax_drag
                     
                     # Apply spending reduction if guardrails active
                     if enable_guardrails and guardrails_active:
                         monthly_spend = monthly_spend * spending_reduction
                     
-                    annual_spend = monthly_spend * 12 * ((1 + inflation_rate) ** year)
+                    # Calculate after-tax spending need
+                    annual_spend_after_tax = monthly_spend * 12 * ((1 + inflation_rate) ** year)
                     
-                    # Mortgage
+                    # Mortgage (after-tax - already paid from after-tax dollars)
                     if year < mortgage_term_years:
-                        annual_spend += annual_mortgage
+                        annual_spend_after_tax += annual_mortgage
                     
-                    # Social Security
+                    # Social Security (after-tax benefit received)
                     if year >= ss_start_year:
                         ss_annual = ss_monthly * 12 * ((1 + inflation_rate) ** (year - ss_start_year))
                     else:
                         ss_annual = 0
                     
-                    net_spend = max(annual_spend - ss_annual, 0)
+                    net_spend_after_tax = max(annual_spend_after_tax - ss_annual, 0)
                     
-                    # Temporary earned income
+                    # Temporary earned income (after-tax)
                     if year < temp_income_years:
-                        net_spend = max(net_spend - temp_income_annual, 0)
+                        net_spend_after_tax = max(net_spend_after_tax - temp_income_annual, 0)
+                    
+                    # Calculate gross withdrawal needed (before taxes)
+                    if current_tax_drag > 0:
+                        gross_withdrawal = net_spend_after_tax / (1 - current_tax_drag)
+                        tax_amount = gross_withdrawal - net_spend_after_tax
+                        taxes_paid += tax_amount
+                    else:
+                        gross_withdrawal = net_spend_after_tax
+                        tax_amount = 0
                     
                     # Check if we have enough total
                     total = equities + bonds + cash
-                    if net_spend >= total:
+                    if gross_withdrawal >= total:
                         success = False
                         failure_years_list.append(year + 1)
                         equities = bonds = cash = 0
@@ -276,7 +322,7 @@ if run_simulation and total_allocation == 100:
                     # WITHDRAWAL STRATEGY - depends on market conditions
                     if in_defensive_mode:
                         # Defensive: withdraw from Cash → Bonds → Equities
-                        remaining_need = net_spend
+                        remaining_need = gross_withdrawal
                         
                         # Take from cash first
                         cash_withdrawal = min(remaining_need, cash)
@@ -299,9 +345,9 @@ if run_simulation and total_allocation == 100:
                         prop_bd = bonds / total
                         prop_cash = cash / total
                         
-                        equities -= net_spend * prop_eq
-                        bonds -= net_spend * prop_bd
-                        cash -= net_spend * prop_cash
+                        equities -= gross_withdrawal * prop_eq
+                        bonds -= gross_withdrawal * prop_bd
+                        cash -= gross_withdrawal * prop_cash
                     
                     # REBALANCING - only if NOT in defensive mode
                     if not in_defensive_mode:
@@ -329,6 +375,7 @@ if run_simulation and total_allocation == 100:
                 years_no.append(y_no)
                 defensive_years_count.append(defensive_years)
                 guardrail_years_count.append(guardrail_years)
+                total_taxes_paid.append(taxes_paid)
         
         # Calculate results
         final_portfolios = np.array(final_portfolios)
@@ -359,11 +406,16 @@ if run_simulation and total_allocation == 100:
                 avg_guardrail_years = np.mean(guardrail_years_count)
                 st.metric("Avg Years with Guardrails", f"{avg_guardrail_years:.1f}")
         
+        # Tax metrics
+        avg_taxes = np.mean(total_taxes_paid)
+        median_taxes = np.median(total_taxes_paid)
+        st.info(f"💸 **Lifetime Taxes Paid:** Average: ${avg_taxes:,.0f} | Median: ${median_taxes:,.0f}")
+        
         # Tabs for different views
         if enable_guardrails:
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "📋 Detailed Stats"])
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "📋 Detailed Stats", "🤖 AI Analysis Export"])
         else:
-            tab1, tab2, tab3, tab4 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "📋 Detailed Stats"])
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "📋 Detailed Stats", "🤖 AI Analysis Export"])
         
         with tab1:
             st.subheader("Final Portfolio Distribution")
@@ -492,9 +544,151 @@ if run_simulation and total_allocation == 100:
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
-            tab_idx = tab5
+            tab_idx_ai = tab5
+            tab_idx = tab6
         else:
-            tab_idx = tab4
+            tab_idx_ai = tab4
+            tab_idx = tab5
+        
+        with tab_idx_ai:
+            st.subheader("🤖 AI Analysis Export")
+            st.markdown("Copy the text below and paste into an AI chat to analyze or compare multiple scenarios")
+            
+            # Generate comprehensive text summary
+            percentiles = [0, 10, 25, 50, 75, 90, 95, 99, 100]
+            percentile_values = np.percentile(final_portfolios, percentiles)
+            
+            analysis_text = f"""RETIREMENT MONTE CARLO SIMULATION RESULTS
+{'='*60}
+
+PARAMETERS:
+- Simulations: {simulations:,}
+- Time Horizon: {years} years
+- Initial Portfolio: ${initial_portfolio:,.0f}
+- Asset Allocation: {equity_pct}% Equities / {bond_pct}% Bonds / {cash_pct}% Cash
+
+MARKET ASSUMPTIONS:
+- Equity Return: {equity_return*100:.1f}% (Volatility: {equity_vol*100:.0f}%)
+- Bond Return: {bond_return*100:.1f}% (Volatility: {bond_vol*100:.0f}%)
+- Cash Return: {cash_return*100:.1f}%
+- Inflation: {inflation_rate*100:.1f}%
+- Real Equity Return: {(equity_return - inflation_rate)*100:.1f}%
+
+TAX ASSUMPTIONS:
+- Go-Go Years Tax Drag: {go_go_tax_drag*100:.0f}%
+- Slow-Go Years Tax Drag: {slow_go_tax_drag*100:.0f}%
+- No-Go Years Tax Drag: {no_go_tax_drag*100:.0f}%
+
+SPENDING PLAN (After-Tax, Today's Dollars):
+- Go-Go Years (1-{go_go_years}): ${go_go_spend:,.0f}/month
+- Slow-Go Years ({go_go_years+1}-{go_go_years+slow_go_years}): ${slow_go_spend:,.0f}/month
+- No-Go Years ({go_go_years+slow_go_years+1}+): ${no_go_spend:,.0f}/month
+
+OTHER INCOME/EXPENSES:
+- Mortgage: {"Yes" if has_mortgage else "No"}"""
+
+            if has_mortgage:
+                analysis_text += f" (${mortgage_balance:,.0f} @ {mortgage_rate*100:.2f}%, {mortgage_term_years} years, ${mortgage_payment:,.0f}/month)"
+            
+            analysis_text += f"""
+- Social Security: {"Yes" if has_ss else "No"}"""
+            
+            if has_ss:
+                analysis_text += f" (${ss_monthly:,.0f}/month starting year {ss_start_year})"
+            
+            analysis_text += f"""
+- Temporary Income: {"Yes" if has_temp_income else "No"}"""
+            
+            if has_temp_income:
+                analysis_text += f" (${temp_income_annual:,.0f}/year for {temp_income_years} years)"
+
+            analysis_text += f"""
+
+WITHDRAWAL STRATEGY:
+- Defensive Trigger: Market down {defensive_trigger*100:.0f}%+
+- Recovery Threshold: Within {recovery_threshold*100:.0f}% of peak
+- Strategy: Withdraw Cash→Bonds→Equities when defensive
+
+GUARDRAILS:
+- Enabled: {"Yes" if enable_guardrails else "No"}"""
+
+            if enable_guardrails:
+                analysis_text += f"""
+- Trigger Threshold: ${guardrail_threshold:,.0f}
+- Spending Reduction: {spending_reduction*100:.0f}%
+- Defensive Allocation: {defensive_equity_pct}% / {defensive_bond_pct}% / {defensive_cash_pct}%
+- Recovery Buffer: {recovery_buffer*100:.0f}%"""
+
+            analysis_text += f"""
+
+{'='*60}
+KEY RESULTS:
+{'='*60}
+
+SUCCESS RATE: {success_rate*100:.1f}%
+Failed Simulations: {simulations - sum(success_flags):,} ({(1-success_rate)*100:.1f}%)
+
+FINAL PORTFOLIO DISTRIBUTION:
+"""
+            for p, val in zip(percentiles, percentile_values):
+                analysis_text += f"  {p:3d}th percentile: ${val:15,.0f}\n"
+
+            analysis_text += f"""
+PORTFOLIO STATISTICS:
+- Mean: ${np.mean(final_portfolios):,.0f}
+- Median: ${np.median(final_portfolios):,.0f}
+- Std Dev: ${np.std(final_portfolios):,.0f}
+
+TAX BURDEN:
+- Average Lifetime Taxes: ${np.mean(total_taxes_paid):,.0f}
+- Median Lifetime Taxes: ${np.median(total_taxes_paid):,.0f}
+
+DEFENSIVE WITHDRAWALS:
+- Average Years in Defensive Mode: {np.mean(defensive_years_count):.1f}
+- Max Years in Defensive Mode: {np.max(defensive_years_count)}
+- Simulations Using Defensive Mode: {100 * np.sum(np.array(defensive_years_count) > 0) / simulations:.1f}%
+"""
+
+            if enable_guardrails:
+                analysis_text += f"""
+GUARDRAILS USAGE:
+- Simulations Triggering Guardrails: {100 * np.sum(np.array(guardrail_years_count) > 0) / simulations:.1f}%
+- Average Years with Guardrails: {np.mean(guardrail_years_count):.1f}
+- Max Years with Guardrails: {np.max(guardrail_years_count)}"""
+                
+                if np.sum(np.array(guardrail_years_count) > 0) > 0:
+                    guardrail_users = [g for g in guardrail_years_count if g > 0]
+                    analysis_text += f"""
+- Average Years (when used): {np.mean(guardrail_users):.1f}
+- Median Years (when used): {np.median(guardrail_users):.1f}"""
+
+            if failure_years_list:
+                analysis_text += f"""
+
+FAILURE ANALYSIS:
+- Earliest Failure: Year {min(failure_years_list)}
+- Latest Failure: Year {max(failure_years_list)}
+- Average Failure Year: {np.mean(failure_years_list):.1f}
+- Median Failure Year: {np.median(failure_years_list):.0f}
+"""
+            else:
+                analysis_text += f"""
+
+FAILURE ANALYSIS:
+- No failures occurred in any simulation
+"""
+
+            analysis_text += f"""
+{'='*60}
+END OF SIMULATION RESULTS
+{'='*60}
+"""
+            
+            # Display in a text area that can be copied
+            st.text_area("Simulation Results (Copy All)", analysis_text, height=600)
+            
+            st.info("💡 **Tip:** Run multiple simulations with different parameters, copy each result, then paste them all into an AI chat with a prompt like: 'Analyze and compare these three retirement scenarios and recommend which is best.'")
+
         
         with tab_idx:
             st.subheader("Detailed Statistics")
@@ -528,6 +722,12 @@ if run_simulation and total_allocation == 100:
                 st.write(f"Std dev: ${np.std(final_portfolios):,.0f}")
                 st.write(f"Min final portfolio: ${np.min(final_portfolios):,.0f}")
                 st.write(f"Max final portfolio: ${np.max(final_portfolios):,.0f}")
+                
+                st.markdown("**Tax Statistics**")
+                st.write(f"Mean lifetime taxes: ${np.mean(total_taxes_paid):,.0f}")
+                st.write(f"Median lifetime taxes: ${np.median(total_taxes_paid):,.0f}")
+                st.write(f"Min lifetime taxes: ${np.min(total_taxes_paid):,.0f}")
+                st.write(f"Max lifetime taxes: ${np.max(total_taxes_paid):,.0f}")
 
 elif run_simulation and total_allocation != 100:
     st.error("⚠️ Please ensure asset allocation sums to 100% before running simulation")
@@ -541,10 +741,17 @@ else:
     
     - Running thousands of random market scenarios
     - Accounting for variable spending patterns over time
+    - **Modeling realistic tax drag** that varies by retirement phase
     - Including mortgages, Social Security, and temporary income
     - Modeling realistic market volatility and drawdowns
     - **Using a defensive bucket strategy during market downturns** to protect against sequence of returns risk
     - **Optional dynamic guardrails** to automatically adjust spending and allocation when portfolio drops
+    
+    **Tax Modeling:**
+    Accounts for the fact that early years (taxable accounts, cap gains) are more tax-efficient than later years (RMDs, ordinary income):
+    - Go-Go years: Lower tax drag (default 5%)
+    - Slow-Go years: Medium tax drag as RMDs start (default 12%)
+    - No-Go years: Higher tax drag from larger RMDs (default 15%)
     
     **Defensive Withdrawal Strategy:**
     When markets drop significantly, the simulator switches to defensive mode:
@@ -560,9 +767,10 @@ else:
     
     **How to use:**
     1. Adjust parameters in the left sidebar
-    2. Set your defensive trigger and recovery thresholds
-    3. Optionally enable guardrails for dynamic adjustment
-    4. Click "Run Simulation"
-    5. Review results across multiple tabs
-    6. Experiment with different scenarios to test sensitivity
+    2. Set tax drag percentages for each phase
+    3. Set your defensive trigger and recovery thresholds
+    4. Optionally enable guardrails for dynamic adjustment
+    5. Click "Run Simulation"
+    6. Review results across multiple tabs
+    7. Experiment with different scenarios to test sensitivity
     """)
