@@ -41,6 +41,7 @@ bond_return = st.sidebar.slider("Bond Return", min_value=0.0, max_value=0.15, va
 bond_vol = st.sidebar.slider("Bond Volatility", min_value=0.0, max_value=0.15, value=0.06, step=0.01, format="%.2f")
 cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, value=0.01, step=0.005, format="%.3f")
 inflation_rate = st.sidebar.slider("Inflation Rate", min_value=0.0, max_value=0.10, value=0.02, step=0.005, format="%.3f")
+inflation_vol = st.sidebar.slider("Inflation Volatility", min_value=0.0, max_value=0.05, value=0.01, step=0.005, format="%.3f", help="Standard deviation of annual inflation")
 
 # Tax Drag
 st.sidebar.subheader("💸 Tax Drag by Period")
@@ -204,6 +205,8 @@ if run_simulation and total_allocation == 100:
             defensive_years_count = []
             guardrail_years_count = []
             total_taxes_paid = []
+            max_consecutive_guardrails = []  # Track longest continuous guardrail period
+            guardrail_patterns = []  # Track year-by-year guardrail status for each sim
             
             for sim in range(simulations):
                 
@@ -222,8 +225,21 @@ if run_simulation and total_allocation == 100:
                 success = True
                 
                 guardrails_active = False
+                consecutive_guardrails = 0
+                max_consecutive = 0
+                guardrail_pattern = []  # Track each year: 1=active, 0=inactive
+                cumulative_inflation = 1.0  # Track cumulative inflation multiplier
                 
                 for year in range(years):
+                    
+                    # Generate variable inflation for this year
+                    if inflation_vol > 0:
+                        year_inflation = max(0, np.random.normal(inflation_rate, inflation_vol))
+                    else:
+                        year_inflation = inflation_rate
+                    
+                    # Update cumulative inflation
+                    cumulative_inflation *= (1 + year_inflation)
                     
                     # Returns
                     equity_r = np.random.normal(equity_return, equity_vol)
@@ -248,9 +264,16 @@ if run_simulation and total_allocation == 100:
                         elif guardrails_active and current_portfolio > guardrail_threshold * (1 + recovery_buffer):
                             # Deactivate guardrails - recovered
                             guardrails_active = False
+                            # Reset consecutive counter when exiting
+                            max_consecutive = max(max_consecutive, consecutive_guardrails)
+                            consecutive_guardrails = 0
                         
                         if guardrails_active:
                             guardrail_years += 1
+                            consecutive_guardrails += 1
+                            guardrail_pattern.append(1)
+                        else:
+                            guardrail_pattern.append(0)
                     
                     # Calculate current drawdown
                     drawdown = (market_high - market_index) / market_high
@@ -283,16 +306,18 @@ if run_simulation and total_allocation == 100:
                     if enable_guardrails and guardrails_active:
                         monthly_spend = monthly_spend * spending_reduction
                     
-                    # Calculate after-tax spending need
-                    annual_spend_after_tax = monthly_spend * 12 * ((1 + inflation_rate) ** year)
+                    # Calculate after-tax spending need using cumulative inflation
+                    annual_spend_after_tax = monthly_spend * 12 * cumulative_inflation
                     
                     # Mortgage (after-tax - already paid from after-tax dollars)
                     if year < mortgage_term_years:
                         annual_spend_after_tax += annual_mortgage
                     
-                    # Social Security (after-tax benefit received)
+                    # Social Security (after-tax benefit received) - use cumulative inflation from SS start
                     if year >= ss_start_year:
-                        ss_annual = ss_monthly * 12 * ((1 + inflation_rate) ** (year - ss_start_year))
+                        ss_inflation_years = year - ss_start_year
+                        ss_cumulative = (1 + inflation_rate) ** ss_inflation_years
+                        ss_annual = ss_monthly * 12 * ss_cumulative
                     else:
                         ss_annual = 0
                     
@@ -368,6 +393,10 @@ if run_simulation and total_allocation == 100:
                         failure_years_list.append(year + 1)
                         break
                 
+                # Check max consecutive one final time at end
+                if enable_guardrails:
+                    max_consecutive = max(max_consecutive, consecutive_guardrails)
+                
                 final_portfolios.append(equities + bonds + cash)
                 success_flags.append(success)
                 years_go.append(y_go)
@@ -376,6 +405,8 @@ if run_simulation and total_allocation == 100:
                 defensive_years_count.append(defensive_years)
                 guardrail_years_count.append(guardrail_years)
                 total_taxes_paid.append(taxes_paid)
+                max_consecutive_guardrails.append(max_consecutive)
+                guardrail_patterns.append(guardrail_pattern)
         
         # Calculate results
         final_portfolios = np.array(final_portfolios)
@@ -526,6 +557,12 @@ if run_simulation and total_allocation == 100:
                         guardrail_users = [g for g in guardrail_years_count if g > 0]
                         st.metric("Avg Years (when used)", f"{np.mean(guardrail_users):.1f}")
                         st.metric("Median Years (when used)", f"{np.median(guardrail_users):.1f}")
+                        
+                        # Add consecutive metrics
+                        max_consec_all = [m for m in max_consecutive_guardrails if m > 0]
+                        if max_consec_all:
+                            st.metric("Avg Max Consecutive Years", f"{np.mean(max_consec_all):.1f}")
+                            st.metric("Longest Consecutive Stretch", f"{np.max(max_consecutive_guardrails)}")
                 
                 # Histogram of guardrail usage
                 st.subheader("Distribution of Guardrail Years")
@@ -543,6 +580,48 @@ if run_simulation and total_allocation == 100:
                     height=400
                 )
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Guardrails Timeline Visualization
+                st.subheader("Guardrails Engagement Timeline")
+                st.markdown("*Showing when guardrails are active across a sample of simulations*")
+                
+                # Select a few representative simulations to visualize
+                sample_sims = min(20, len(guardrail_patterns))
+                
+                # Create heatmap data - showing guardrail status by year and simulation
+                heatmap_data = []
+                sim_labels = []
+                
+                for i in range(sample_sims):
+                    if len(guardrail_patterns[i]) > 0:
+                        heatmap_data.append(guardrail_patterns[i])
+                        total_gr_years = guardrail_years_count[i]
+                        max_consec = max_consecutive_guardrails[i]
+                        sim_labels.append(f"Sim {i+1} ({total_gr_years}yr, max{max_consec})")
+                
+                if heatmap_data:
+                    fig = go.Figure(data=go.Heatmap(
+                        z=heatmap_data,
+                        x=list(range(1, years+1)),
+                        y=sim_labels,
+                        colorscale=[[0, 'lightgreen'], [1, 'red']],
+                        showscale=True,
+                        colorbar=dict(
+                            title="Status",
+                            tickvals=[0, 1],
+                            ticktext=["Normal", "Guardrails"]
+                        )
+                    ))
+                    fig.update_layout(
+                        xaxis_title="Year",
+                        yaxis_title="Simulation",
+                        height=max(400, sample_sims * 25),
+                        yaxis=dict(autorange="reversed")
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption("🟢 Green = Normal spending/allocation | 🔴 Red = Guardrails active (reduced spending + defensive allocation)")
+                else:
+                    st.info("No simulations triggered guardrails in this run")
             
             tab_idx_ai = tab5
             tab_idx = tab6
@@ -571,7 +650,7 @@ MARKET ASSUMPTIONS:
 - Equity Return: {equity_return*100:.1f}% (Volatility: {equity_vol*100:.0f}%)
 - Bond Return: {bond_return*100:.1f}% (Volatility: {bond_vol*100:.0f}%)
 - Cash Return: {cash_return*100:.1f}%
-- Inflation: {inflation_rate*100:.1f}%
+- Inflation: {inflation_rate*100:.1f}% (Volatility: {inflation_vol*100:.1f}%)
 - Real Equity Return: {(equity_return - inflation_rate)*100:.1f}%
 
 TAX ASSUMPTIONS:
@@ -658,9 +737,14 @@ GUARDRAILS USAGE:
                 
                 if np.sum(np.array(guardrail_years_count) > 0) > 0:
                     guardrail_users = [g for g in guardrail_years_count if g > 0]
+                    max_consec_all = [m for m in max_consecutive_guardrails if m > 0]
                     analysis_text += f"""
 - Average Years (when used): {np.mean(guardrail_users):.1f}
 - Median Years (when used): {np.median(guardrail_users):.1f}"""
+                    if max_consec_all:
+                        analysis_text += f"""
+- Average Max Consecutive Years: {np.mean(max_consec_all):.1f}
+- Longest Consecutive Stretch: {np.max(max_consecutive_guardrails)}"""
 
             if failure_years_list:
                 analysis_text += f"""
