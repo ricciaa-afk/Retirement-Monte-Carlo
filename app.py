@@ -43,6 +43,40 @@ cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, va
 inflation_rate = st.sidebar.slider("Inflation Rate", min_value=0.0, max_value=0.10, value=0.02, step=0.005, format="%.3f")
 inflation_vol = st.sidebar.slider("Inflation Volatility", min_value=0.0, max_value=0.05, value=0.01, step=0.005, format="%.3f", help="Standard deviation of annual inflation")
 
+# Regime-Based Inflation
+st.sidebar.subheader("📊 Inflation Regimes (Optional)")
+use_inflation_regimes = st.sidebar.checkbox("Use Regime-Based Inflation", value=False, help="Model economic cycles with persistent inflation periods")
+
+if use_inflation_regimes:
+    st.sidebar.markdown("*Inflation will shift between distinct economic regimes*")
+    
+    st.sidebar.markdown("**Low Inflation Regime:**")
+    low_inflation_mean = st.sidebar.slider("Low - Mean", min_value=0.0, max_value=0.05, value=0.015, step=0.005, format="%.3f", key="low_mean")
+    low_inflation_vol = st.sidebar.slider("Low - Volatility", min_value=0.0, max_value=0.03, value=0.0075, step=0.0025, format="%.4f", key="low_vol")
+    low_inflation_duration = st.sidebar.slider("Low - Avg Duration (years)", min_value=3, max_value=20, value=8, step=1, key="low_dur")
+    
+    st.sidebar.markdown("**Normal Inflation Regime:**")
+    normal_inflation_mean = st.sidebar.slider("Normal - Mean", min_value=0.0, max_value=0.08, value=0.025, step=0.005, format="%.3f", key="normal_mean")
+    normal_inflation_vol = st.sidebar.slider("Normal - Volatility", min_value=0.0, max_value=0.03, value=0.01, step=0.0025, format="%.4f", key="normal_vol")
+    normal_inflation_duration = st.sidebar.slider("Normal - Avg Duration (years)", min_value=3, max_value=20, value=12, step=1, key="normal_dur")
+    
+    st.sidebar.markdown("**High Inflation Regime:**")
+    high_inflation_mean = st.sidebar.slider("High - Mean", min_value=0.0, max_value=0.15, value=0.05, step=0.005, format="%.3f", key="high_mean")
+    high_inflation_vol = st.sidebar.slider("High - Volatility", min_value=0.0, max_value=0.05, value=0.015, step=0.0025, format="%.4f", key="high_vol")
+    high_inflation_duration = st.sidebar.slider("High - Avg Duration (years)", min_value=3, max_value=20, value=7, step=1, key="high_dur")
+    
+    starting_regime = st.sidebar.selectbox("Starting Regime", ["Normal", "Low", "High"], index=0)
+    
+    # Store regime parameters
+    inflation_regimes = {
+        "Low": {"mean": low_inflation_mean, "vol": low_inflation_vol, "duration": low_inflation_duration},
+        "Normal": {"mean": normal_inflation_mean, "vol": normal_inflation_vol, "duration": normal_inflation_duration},
+        "High": {"mean": high_inflation_mean, "vol": high_inflation_vol, "duration": high_inflation_duration}
+    }
+else:
+    starting_regime = None
+    inflation_regimes = None
+
 # Tax Drag
 st.sidebar.subheader("💸 Tax Drag by Period")
 st.sidebar.markdown("*Percentage of withdrawals lost to taxes*")
@@ -147,13 +181,33 @@ if enable_guardrails:
         help="If portfolio drops below this, activate guardrails"
     )
     
-    spending_reduction = st.sidebar.slider(
-        "Reduced Spending (%)", 
-        min_value=50, 
-        max_value=100, 
-        value=75, 
+    st.sidebar.markdown("**Spending Reductions (% to CUT):**")
+    
+    go_go_spending_cut = st.sidebar.slider(
+        "Go-Go Years Cut (%)", 
+        min_value=0, 
+        max_value=50, 
+        value=20, 
         step=5,
-        help="Percentage of base spending when guardrails active"
+        help="Percentage reduction in go-go spending when guardrails active"
+    ) / 100
+    
+    slow_go_spending_cut = st.sidebar.slider(
+        "Slow-Go Years Cut (%)", 
+        min_value=0, 
+        max_value=50, 
+        value=10, 
+        step=5,
+        help="Percentage reduction in slow-go spending when guardrails active"
+    ) / 100
+    
+    no_go_spending_cut = st.sidebar.slider(
+        "No-Go Years Cut (%)", 
+        min_value=0, 
+        max_value=50, 
+        value=5, 
+        step=5,
+        help="Percentage reduction in no-go spending when guardrails active"
     ) / 100
     
     st.sidebar.markdown("**Defensive Allocation (when triggered):**")
@@ -230,12 +284,51 @@ if run_simulation and total_allocation == 100:
                 guardrail_pattern = []  # Track each year: 1=active, 0=inactive
                 cumulative_inflation = 1.0  # Track cumulative inflation multiplier
                 
+                # Inflation regime tracking
+                if use_inflation_regimes:
+                    current_regime = starting_regime
+                    years_in_regime = 0
+                else:
+                    current_regime = None
+                    years_in_regime = 0
+                
                 for year in range(years):
                     
                     # Generate variable inflation for this year
-                    if inflation_vol > 0:
+                    if use_inflation_regimes:
+                        # Regime-based inflation with transitions
+                        years_in_regime += 1
+                        
+                        # Check if regime should transition
+                        regime_params = inflation_regimes[current_regime]
+                        expected_duration = regime_params["duration"]
+                        
+                        # Probability of transitioning increases as we exceed expected duration
+                        # Use exponential probability: low chance early, higher chance as time goes on
+                        transition_prob = 1 - np.exp(-years_in_regime / expected_duration)
+                        
+                        if np.random.random() < transition_prob:
+                            # Transition to new regime
+                            # Weighted transitions: 50% Normal, 25% Low, 25% High
+                            regime_weights = {"Normal": 0.5, "Low": 0.25, "High": 0.25}
+                            # But can't transition to current regime
+                            del regime_weights[current_regime]
+                            # Renormalize
+                            total = sum(regime_weights.values())
+                            regime_weights = {k: v/total for k, v in regime_weights.items()}
+                            
+                            current_regime = np.random.choice(list(regime_weights.keys()), p=list(regime_weights.values()))
+                            years_in_regime = 0
+                        
+                        # Generate inflation for this year from current regime
+                        regime_params = inflation_regimes[current_regime]
+                        year_inflation = max(0, np.random.normal(regime_params["mean"], regime_params["vol"]))
+                        
+                    elif inflation_vol > 0:
+                        # Simple random inflation
                         year_inflation = max(0, np.random.normal(inflation_rate, inflation_vol))
                     else:
+                        # Fixed inflation
                         year_inflation = inflation_rate
                     
                     # Update cumulative inflation
@@ -293,18 +386,20 @@ if run_simulation and total_allocation == 100:
                         monthly_spend = go_go_spend
                         y_go += 1
                         current_tax_drag = go_go_tax_drag
+                        current_spending_cut = go_go_spending_cut if enable_guardrails and guardrails_active else 0
                     elif year < (go_go_years + slow_go_years):
                         monthly_spend = slow_go_spend
                         y_slow += 1
                         current_tax_drag = slow_go_tax_drag
+                        current_spending_cut = slow_go_spending_cut if enable_guardrails and guardrails_active else 0
                     else:
                         monthly_spend = no_go_spend
                         y_no += 1
                         current_tax_drag = no_go_tax_drag
+                        current_spending_cut = no_go_spending_cut if enable_guardrails and guardrails_active else 0
                     
-                    # Apply spending reduction if guardrails active
-                    if enable_guardrails and guardrails_active:
-                        monthly_spend = monthly_spend * spending_reduction
+                    # Apply spending reduction (cut is percentage to reduce, not percentage to keep)
+                    monthly_spend = monthly_spend * (1 - current_spending_cut)
                     
                     # Calculate after-tax spending need using cumulative inflation
                     annual_spend_after_tax = monthly_spend * 12 * cumulative_inflation
@@ -650,7 +745,17 @@ MARKET ASSUMPTIONS:
 - Equity Return: {equity_return*100:.1f}% (Volatility: {equity_vol*100:.0f}%)
 - Bond Return: {bond_return*100:.1f}% (Volatility: {bond_vol*100:.0f}%)
 - Cash Return: {cash_return*100:.1f}%
-- Inflation: {inflation_rate*100:.1f}% (Volatility: {inflation_vol*100:.1f}%)
+- Inflation: {inflation_rate*100:.1f}% (Volatility: {inflation_vol*100:.1f}%)"""
+            
+            if use_inflation_regimes:
+                analysis_text += f"""
+- REGIME-BASED INFLATION ENABLED:
+  - Starting Regime: {starting_regime}
+  - Low Regime: {low_inflation_mean*100:.1f}% ± {low_inflation_vol*100:.2f}%, avg {low_inflation_duration} years
+  - Normal Regime: {normal_inflation_mean*100:.1f}% ± {normal_inflation_vol*100:.2f}%, avg {normal_inflation_duration} years
+  - High Regime: {high_inflation_mean*100:.1f}% ± {high_inflation_vol*100:.2f}%, avg {high_inflation_duration} years"""
+            
+            analysis_text += f"""
 - Real Equity Return: {(equity_return - inflation_rate)*100:.1f}%
 
 TAX ASSUMPTIONS:
@@ -666,8 +771,12 @@ SPENDING PLAN (After-Tax, Today's Dollars):
 OTHER INCOME/EXPENSES:
 - Mortgage: {"Yes" if has_mortgage else "No"}"""
 
-            if has_mortgage:
-                analysis_text += f" (${mortgage_balance:,.0f} @ {mortgage_rate*100:.2f}%, {mortgage_term_years} years, ${mortgage_payment:,.0f}/month)"
+            if has_mortgage and mortgage_balance > 0:
+                # Recalculate mortgage payment for display
+                mort_pmt = mortgage_balance * (mortgage_rate / 12) / (
+                    1 - (1 + mortgage_rate / 12) ** (-mortgage_term_years * 12)
+                )
+                analysis_text += f" (${mortgage_balance:,.0f} @ {mortgage_rate*100:.2f}%, {mortgage_term_years} years, ${mort_pmt:,.0f}/month)"
             
             analysis_text += f"""
 - Social Security: {"Yes" if has_ss else "No"}"""
@@ -694,7 +803,7 @@ GUARDRAILS:
             if enable_guardrails:
                 analysis_text += f"""
 - Trigger Threshold: ${guardrail_threshold:,.0f}
-- Spending Reduction: {spending_reduction*100:.0f}%
+- Spending Reductions: Go-Go {go_go_spending_cut*100:.0f}% / Slow-Go {slow_go_spending_cut*100:.0f}% / No-Go {no_go_spending_cut*100:.0f}%
 - Defensive Allocation: {defensive_equity_pct}% / {defensive_bond_pct}% / {defensive_cash_pct}%
 - Recovery Buffer: {recovery_buffer*100:.0f}%"""
 
