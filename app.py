@@ -81,8 +81,8 @@ else:
 st.sidebar.subheader("💸 Tax Drag by Period")
 st.sidebar.markdown("*Percentage of withdrawals lost to taxes*")
 
-go_go_tax_drag = st.sidebar.slider(
-    "Go-Go Years Tax Drag (%)", 
+high_spend_tax_drag = st.sidebar.slider(
+    "High Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
     value=5, 
@@ -90,8 +90,8 @@ go_go_tax_drag = st.sidebar.slider(
     help="Early years: pulling from taxable accounts, cap gains treatment"
 ) / 100
 
-slow_go_tax_drag = st.sidebar.slider(
-    "Slow-Go Years Tax Drag (%)", 
+med_spend_tax_drag = st.sidebar.slider(
+    "Medium Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
     value=12, 
@@ -99,8 +99,8 @@ slow_go_tax_drag = st.sidebar.slider(
     help="Middle years: RMDs start, mix of account types"
 ) / 100
 
-no_go_tax_drag = st.sidebar.slider(
-    "No-Go Years Tax Drag (%)", 
+low_spend_tax_drag = st.sidebar.slider(
+    "Low Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
     value=15, 
@@ -110,13 +110,13 @@ no_go_tax_drag = st.sidebar.slider(
 
 # Spending Glidepath
 st.sidebar.subheader("💳 Spending Glidepath (Monthly, After-Tax $)")
-go_go_spend = st.sidebar.number_input("Go-Go Years (Monthly)", min_value=0, max_value=50000, value=11100, step=100)
-go_go_years = st.sidebar.number_input("Go-Go Duration (years)", min_value=0, max_value=50, value=10)
+high_spend_monthly = st.sidebar.number_input("High Spend Years (Monthly)", min_value=0, max_value=50000, value=11100, step=100)
+high_spend_years = st.sidebar.number_input("High Spend Duration (years)", min_value=0, max_value=50, value=10)
 
-slow_go_spend = st.sidebar.number_input("Slow-Go Years (Monthly)", min_value=0, max_value=50000, value=9100, step=100)
-slow_go_years = st.sidebar.number_input("Slow-Go Duration (years)", min_value=0, max_value=50, value=15)
+med_spend_monthly = st.sidebar.number_input("Medium Spend Years (Monthly)", min_value=0, max_value=50000, value=9100, step=100)
+med_spend_years = st.sidebar.number_input("Medium Spend Duration (years)", min_value=0, max_value=50, value=15)
 
-no_go_spend = st.sidebar.number_input("No-Go Years (Monthly)", min_value=0, max_value=50000, value=8350, step=100)
+low_spend_monthly = st.sidebar.number_input("Low Spend Years (Monthly)", min_value=0, max_value=50000, value=8350, step=100)
 
 # Mortgage
 st.sidebar.subheader("🏠 Mortgage")
@@ -183,31 +183,31 @@ if enable_guardrails:
     
     st.sidebar.markdown("**Spending Reductions (% to CUT):**")
     
-    go_go_spending_cut = st.sidebar.slider(
-        "Go-Go Years Cut (%)", 
+    high_spend_cut = st.sidebar.slider(
+        "High Spend Years Cut (%)", 
         min_value=0, 
         max_value=50, 
         value=20, 
         step=5,
-        help="Percentage reduction in go-go spending when guardrails active"
+        help="Percentage reduction in high spend when guardrails active"
     ) / 100
     
-    slow_go_spending_cut = st.sidebar.slider(
-        "Slow-Go Years Cut (%)", 
+    med_spend_cut = st.sidebar.slider(
+        "Medium Spend Years Cut (%)", 
         min_value=0, 
         max_value=50, 
         value=10, 
         step=5,
-        help="Percentage reduction in slow-go spending when guardrails active"
+        help="Percentage reduction in medium spend when guardrails active"
     ) / 100
     
-    no_go_spending_cut = st.sidebar.slider(
-        "No-Go Years Cut (%)", 
+    low_spend_cut = st.sidebar.slider(
+        "Low Spend Years Cut (%)", 
         min_value=0, 
         max_value=50, 
         value=5, 
         step=5,
-        help="Percentage reduction in no-go spending when guardrails active"
+        help="Percentage reduction in low spend when guardrails active"
     ) / 100
     
     st.sidebar.markdown("**Defensive Allocation (when triggered):**")
@@ -382,21 +382,21 @@ if run_simulation and total_allocation == 100:
                         defensive_years += 1
                     
                     # Spending Phase - apply guardrail reduction if active
-                    if year < go_go_years:
-                        monthly_spend = go_go_spend
+                    if year < high_spend_years:
+                        monthly_spend = high_spend_monthly
                         y_go += 1
-                        current_tax_drag = go_go_tax_drag
-                        current_spending_cut = go_go_spending_cut if enable_guardrails and guardrails_active else 0
-                    elif year < (go_go_years + slow_go_years):
-                        monthly_spend = slow_go_spend
+                        current_tax_drag = high_spend_tax_drag
+                        current_spending_cut = high_spend_cut if enable_guardrails and guardrails_active else 0
+                    elif year < (high_spend_years + med_spend_years):
+                        monthly_spend = med_spend_monthly
                         y_slow += 1
-                        current_tax_drag = slow_go_tax_drag
-                        current_spending_cut = slow_go_spending_cut if enable_guardrails and guardrails_active else 0
+                        current_tax_drag = med_spend_tax_drag
+                        current_spending_cut = med_spend_cut if enable_guardrails and guardrails_active else 0
                     else:
-                        monthly_spend = no_go_spend
+                        monthly_spend = low_spend_monthly
                         y_no += 1
-                        current_tax_drag = no_go_tax_drag
-                        current_spending_cut = no_go_spending_cut if enable_guardrails and guardrails_active else 0
+                        current_tax_drag = low_spend_tax_drag
+                        current_spending_cut = low_spend_cut if enable_guardrails and guardrails_active else 0
                     
                     # Apply spending reduction (cut is percentage to reduce, not percentage to keep)
                     monthly_spend = monthly_spend * (1 - current_spending_cut)
@@ -770,14 +770,14 @@ MARKET ASSUMPTIONS:
 - Real Equity Return: {(equity_return - inflation_rate)*100:.1f}%
 
 TAX ASSUMPTIONS:
-- Go-Go Years Tax Drag: {go_go_tax_drag*100:.0f}%
-- Slow-Go Years Tax Drag: {slow_go_tax_drag*100:.0f}%
-- No-Go Years Tax Drag: {no_go_tax_drag*100:.0f}%
+- High Spend Years Tax Drag: {high_spend_tax_drag*100:.0f}%
+- Medium Spend Years Tax Drag: {med_spend_tax_drag*100:.0f}%
+- Low Spend Years Tax Drag: {low_spend_tax_drag*100:.0f}%
 
 SPENDING PLAN (After-Tax, Today's Dollars):
-- Go-Go Years (1-{go_go_years}): ${go_go_spend:,.0f}/month
-- Slow-Go Years ({go_go_years+1}-{go_go_years+slow_go_years}): ${slow_go_spend:,.0f}/month
-- No-Go Years ({go_go_years+slow_go_years+1}+): ${no_go_spend:,.0f}/month
+- High Spend Years (1-{high_spend_years}): ${high_spend_monthly:,.0f}/month
+- Medium Spend Years ({high_spend_years+1}-{high_spend_years+med_spend_years}): ${med_spend_monthly:,.0f}/month
+- Low Spend Years ({high_spend_years+med_spend_years+1}+): ${low_spend_monthly:,.0f}/month
 
 OTHER INCOME/EXPENSES:
 - Mortgage: {"Yes" if has_mortgage else "No"}"""
@@ -814,7 +814,7 @@ GUARDRAILS:
             if enable_guardrails:
                 analysis_text += f"""
 - Trigger Threshold: ${guardrail_threshold:,.0f}
-- Spending Reductions: Go-Go {go_go_spending_cut*100:.0f}% / Slow-Go {slow_go_spending_cut*100:.0f}% / No-Go {no_go_spending_cut*100:.0f}%
+- Spending Reductions: High {high_spend_cut*100:.0f}% / Med {med_spend_cut*100:.0f}% / Low {low_spend_cut*100:.0f}%
 - Defensive Allocation: {defensive_equity_pct}% / {defensive_bond_pct}% / {defensive_cash_pct}%
 - Recovery Buffer: {recovery_buffer*100:.0f}%"""
 
@@ -901,9 +901,9 @@ END OF SIMULATION RESULTS
             
             with col1:
                 st.markdown("**Spending Phase Summary**")
-                st.write(f"Average Go-Go years: {np.mean(years_go):.1f}")
-                st.write(f"Average Slow-Go years: {np.mean(years_slow):.1f}")
-                st.write(f"Average No-Go years: {np.mean(years_no):.1f}")
+                st.write(f"Average High Spend years: {np.mean(years_go):.1f}")
+                st.write(f"Average Medium Spend years: {np.mean(years_slow):.1f}")
+                st.write(f"Average Low Spend years: {np.mean(years_no):.1f}")
                 
                 if has_ss and ss_start_year < years:
                     ss_year1_nominal = ss_monthly * 12 * ((1 + inflation_rate) ** (ss_start_year - 1))
@@ -953,9 +953,9 @@ else:
     
     **Tax Modeling:**
     Accounts for the fact that early years (taxable accounts, cap gains) are more tax-efficient than later years (RMDs, ordinary income):
-    - Go-Go years: Lower tax drag (default 5%)
-    - Slow-Go years: Medium tax drag as RMDs start (default 12%)
-    - No-Go years: Higher tax drag from larger RMDs (default 15%)
+    - High Spend years: Lower tax drag (default 5%)
+    - Medium Spend years: Medium tax drag as RMDs start (default 12%)
+    - Low Spend years: Higher tax drag from larger RMDs (default 15%)
     
     **Defensive Withdrawal Strategy:**
     When markets drop significantly, the simulator switches to defensive mode:
