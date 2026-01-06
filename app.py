@@ -469,19 +469,30 @@ if run_simulation and total_allocation == 100:
                         bonds -= gross_withdrawal * prop_bd
                         cash -= gross_withdrawal * prop_cash
                     
-                    # REBALANCING - only if NOT in defensive mode
+                    # REBALANCING - only if NOT in defensive mode AND equities have grown significantly
                     if not in_defensive_mode:
                         total = equities + bonds + cash
                         
-                        # Use guardrail allocation if active, otherwise use normal allocation
+                        # Calculate target equity amount based on allocation
                         if enable_guardrails and guardrails_active:
-                            target_mix = defensive_asset_mix
+                            target_equity_allocation = defensive_asset_mix['equities']
                         else:
-                            target_mix = asset_mix
+                            target_equity_allocation = asset_mix['equities']
                         
-                        equities = total * target_mix['equities']
-                        bonds = total * target_mix['bonds']
-                        cash = total * target_mix['cash']
+                        target_equity_amount = total * target_equity_allocation
+                        
+                        # Only rebalance if equities have grown 20% above target
+                        # This ensures we only trim gains, not sell during early recovery
+                        if equities > target_equity_amount * 1.20:
+                            # Rebalance: trim equity gains to restore bonds/cash
+                            if enable_guardrails and guardrails_active:
+                                target_mix = defensive_asset_mix
+                            else:
+                                target_mix = asset_mix
+                            
+                            equities = total * target_mix['equities']
+                            bonds = total * target_mix['bonds']
+                            cash = total * target_mix['cash']
                     
                     if equities + bonds + cash <= 0:
                         success = False
