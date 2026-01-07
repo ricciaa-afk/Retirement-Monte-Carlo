@@ -118,6 +118,21 @@ med_spend_years = st.sidebar.number_input("Medium Spend Duration (years)", min_v
 
 low_spend_monthly = st.sidebar.number_input("Low Spend Years (Monthly)", min_value=0, max_value=50000, value=8350, step=100)
 
+# Spending Model Selection
+st.sidebar.subheader("📊 Spending Model")
+use_conditional_spend = st.sidebar.checkbox("Use Conditional Spending Model", value=False, 
+    help="Dynamically adjust spending tier based on portfolio value vs present value of remaining needs")
+
+if use_conditional_spend:
+    st.sidebar.markdown("*Spending tier selected each year based on portfolio health*")
+    discount_rate = st.sidebar.slider("Discount Rate for PV Calculation", 
+        min_value=0.0, max_value=0.10, value=0.04, step=0.005, format="%.3f",
+        help="Rate used to calculate present value of future spending needs. Higher rate = more aggressive spending.")
+    st.sidebar.info(f"With {inflation_rate*100:.1f}% inflation, this implies {(discount_rate-inflation_rate)*100:.1f}% real discount rate")
+else:
+    discount_rate = None
+    st.sidebar.markdown("*Spending follows planned year-based tiers*")
+
 # Mortgage
 st.sidebar.subheader("🏠 Mortgage")
 has_mortgage = st.sidebar.checkbox("Include Mortgage", value=True)
@@ -262,6 +277,14 @@ if run_simulation and total_allocation == 100:
             max_consecutive_guardrails = []  # Track longest continuous guardrail period
             guardrail_patterns = []  # Track year-by-year guardrail status for each sim
             
+            # Conditional spending tracking
+            if use_conditional_spend:
+                tier_usage_high = []
+                tier_usage_med = []
+                tier_usage_low = []
+                max_consecutive_low_tier = []
+                tier_patterns = []  # Track which tier each year: 1=high, 2=med, 3=low
+            
             for sim in range(simulations):
                 
                 # Initialize portfolio buckets
@@ -291,6 +314,15 @@ if run_simulation and total_allocation == 100:
                 else:
                     current_regime = None
                     years_in_regime = 0
+                
+                # Conditional spending tracking
+                if use_conditional_spend:
+                    years_high_tier = 0
+                    years_med_tier = 0
+                    years_low_tier = 0
+                    consecutive_low_tier = 0
+                    max_consecutive_low = 0
+                    tier_pattern = []
                 
                 for year in range(years):
                     
@@ -381,22 +413,114 @@ if run_simulation and total_allocation == 100:
                     if in_defensive_mode:
                         defensive_years += 1
                     
-                    # Spending Phase - apply guardrail reduction if active
-                    if year < high_spend_years:
-                        monthly_spend = high_spend_monthly
-                        y_go += 1
-                        current_tax_drag = high_spend_tax_drag
-                        current_spending_cut = high_spend_cut if enable_guardrails and guardrails_active else 0
-                    elif year < (high_spend_years + med_spend_years):
-                        monthly_spend = med_spend_monthly
-                        y_slow += 1
-                        current_tax_drag = med_spend_tax_drag
-                        current_spending_cut = med_spend_cut if enable_guardrails and guardrails_active else 0
+                    # Spending Phase - determine monthly spend based on model
+                    if use_conditional_spend:
+                        # CONDITIONAL SPENDING MODEL
+                        # Calculate PV thresholds based on current portfolio needs
+                        
+                        years_remaining = years - year
+                        
+                        if years_remaining > 0:
+                            # Calculate PV factor for annuity
+                            pv_factor = (1 - (1 + discount_rate)**-years_remaining) / discount_rate
+                            
+                            # Calculate current year's nominal spending for each tier (already inflated)
+                            current_inflation_factor = cumulative_inflation
+                            
+                            # High tier net withdrawal
+                            high_gross = high_spend_monthly * 12 * current_inflation_factor
+                            if year < mortgage_term_years:
+                                high_gross += annual_mortgage
+                            high_net = high_gross
+                            if year >= ss_start_year:
+                                ss_current = ss_monthly * 12 * ((1 + inflation_rate) ** (year - ss_start_year))
+                                high_net -= ss_current
+                            if year < temp_income_years:
+                                high_net -= temp_income_annual
+                            high_net = max(high_net, 0)
+                            
+                            # Med tier net withdrawal
+                            med_gross = med_spend_monthly * 12 * current_inflation_factor
+                            if year < mortgage_term_years:
+                                med_gross += annual_mortgage
+                            med_net = med_gross
+                            if year >= ss_start_year:
+                                med_net -= ss_current
+                            if year < temp_income_years:
+                                med_net -= temp_income_annual
+                            med_net = max(med_net, 0)
+                            
+                            # Low tier net withdrawal  
+                            low_gross = low_spend_monthly * 12 * current_inflation_factor
+                            if year < mortgage_term_years:
+                                low_gross += annual_mortgage
+                            low_net = low_gross
+                            if year >= ss_start_year:
+                                low_net -= ss_current
+                            if year < temp_income_years:
+                                low_net -= temp_income_annual
+                            low_net = max(low_net, 0)
+                            
+                            # Calculate PV thresholds
+                            high_threshold = high_net * pv_factor
+                            med_threshold = med_net * pv_factor
+                            low_threshold = low_net * pv_factor
+                            
+                            # Compare current portfolio to thresholds
+                            current_portfolio = equities + bonds + cash
+                            
+                            if current_portfolio >= high_threshold:
+                                monthly_spend = high_spend_monthly
+                                current_tier = 1
+                                years_high_tier += 1
+                                consecutive_low_tier = 0
+                            elif current_portfolio >= med_threshold:
+                                monthly_spend = med_spend_monthly
+                                current_tier = 2
+                                years_med_tier += 1
+                                consecutive_low_tier = 0
+                            else:
+                                monthly_spend = low_spend_monthly
+                                current_tier = 3
+                                years_low_tier += 1
+                                consecutive_low_tier += 1
+                                max_consecutive_low = max(max_consecutive_low, consecutive_low_tier)
+                            
+                            tier_pattern.append(current_tier)
+                        else:
+                            # Last year - default to low tier
+                            monthly_spend = low_spend_monthly
+                            current_tier = 3
+                            tier_pattern.append(current_tier)
+                        
+                        # Set tax drag based on tier selected
+                        if current_tier == 1:
+                            current_tax_drag = high_spend_tax_drag
+                            current_spending_cut = high_spend_cut if enable_guardrails and guardrails_active else 0
+                        elif current_tier == 2:
+                            current_tax_drag = med_spend_tax_drag
+                            current_spending_cut = med_spend_cut if enable_guardrails and guardrails_active else 0
+                        else:
+                            current_tax_drag = low_spend_tax_drag
+                            current_spending_cut = low_spend_cut if enable_guardrails and guardrails_active else 0
+                    
                     else:
-                        monthly_spend = low_spend_monthly
-                        y_no += 1
-                        current_tax_drag = low_spend_tax_drag
-                        current_spending_cut = low_spend_cut if enable_guardrails and guardrails_active else 0
+                        # PLANNED SPENDING MODEL (original logic)
+                        if year < high_spend_years:
+                            monthly_spend = high_spend_monthly
+                            y_go += 1
+                            current_tax_drag = high_spend_tax_drag
+                            current_spending_cut = high_spend_cut if enable_guardrails and guardrails_active else 0
+                        elif year < (high_spend_years + med_spend_years):
+                            monthly_spend = med_spend_monthly
+                            y_slow += 1
+                            current_tax_drag = med_spend_tax_drag
+                            current_spending_cut = med_spend_cut if enable_guardrails and guardrails_active else 0
+                        else:
+                            monthly_spend = low_spend_monthly
+                            y_no += 1
+                            current_tax_drag = low_spend_tax_drag
+                            current_spending_cut = low_spend_cut if enable_guardrails and guardrails_active else 0
                     
                     # Apply spending reduction (cut is percentage to reduce, not percentage to keep)
                     monthly_spend = monthly_spend * (1 - current_spending_cut)
@@ -503,6 +627,9 @@ if run_simulation and total_allocation == 100:
                 if enable_guardrails:
                     max_consecutive = max(max_consecutive, consecutive_guardrails)
                 
+                if use_conditional_spend:
+                    max_consecutive_low = max(max_consecutive_low, consecutive_low_tier)
+                
                 final_portfolios.append(equities + bonds + cash)
                 success_flags.append(success)
                 years_go.append(y_go)
@@ -513,6 +640,13 @@ if run_simulation and total_allocation == 100:
                 total_taxes_paid.append(taxes_paid)
                 max_consecutive_guardrails.append(max_consecutive)
                 guardrail_patterns.append(guardrail_pattern)
+                
+                if use_conditional_spend:
+                    tier_usage_high.append(years_high_tier)
+                    tier_usage_med.append(years_med_tier)
+                    tier_usage_low.append(years_low_tier)
+                    max_consecutive_low_tier.append(max_consecutive_low)
+                    tier_patterns.append(tier_pattern)
         
         # Calculate results
         final_portfolios = np.array(final_portfolios)
@@ -549,7 +683,11 @@ if run_simulation and total_allocation == 100:
         st.info(f"💸 **Lifetime Taxes Paid:** Average: ${avg_taxes:,.0f} | Median: ${median_taxes:,.0f}")
         
         # Tabs for different views
-        if enable_guardrails:
+        if use_conditional_spend and enable_guardrails:
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "🎯 Conditional Spending", "🤖 AI Analysis Export", "📋 Detailed Stats"])
+        elif use_conditional_spend:
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🎯 Conditional Spending", "🤖 AI Analysis Export", "📋 Detailed Stats"])
+        elif enable_guardrails:
             tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         else:
             tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
@@ -728,7 +866,117 @@ if run_simulation and total_allocation == 100:
                     st.caption("🟢 Green = Normal spending/allocation | 🔴 Red = Guardrails active (reduced spending + defensive allocation)")
                 else:
                     st.info("No simulations triggered guardrails in this run")
+        
+        # Conditional Spending Analysis Tab
+        if use_conditional_spend:
+            # Determine which tab index based on whether guardrails enabled
+            if enable_guardrails:
+                tab_cond = tab5
+                tab_idx_ai_temp = tab6
+                tab_idx_temp = tab7
+            else:
+                tab_cond = tab4
+                tab_idx_ai_temp = tab5
+                tab_idx_temp = tab6
             
+            with tab_cond:
+                st.subheader("🎯 Conditional Spending Analysis")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Avg Years High Tier", f"{np.mean(tier_usage_high):.1f}")
+                    st.metric("% Sims Using High Tier", f"{100 * np.sum(np.array(tier_usage_high) > 0) / simulations:.1f}%")
+                
+                with col2:
+                    st.metric("Avg Years Med Tier", f"{np.mean(tier_usage_med):.1f}")
+                    st.metric("% Sims Using Med Tier", f"{100 * np.sum(np.array(tier_usage_med) > 0) / simulations:.1f}%")
+                
+                with col3:
+                    st.metric("Avg Years Low Tier", f"{np.mean(tier_usage_low):.1f}")
+                    st.metric("% Sims Dropping to Low", f"{100 * np.sum(np.array(tier_usage_low) > 0) / simulations:.1f}%")
+                
+                # Consecutive low tier metrics
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    low_tier_users = [m for m in max_consecutive_low_tier if m > 0]
+                    if low_tier_users:
+                        st.metric("Avg Max Consecutive Years in Low", f"{np.mean(low_tier_users):.1f}")
+                        st.metric("Longest Stretch in Low Tier", f"{np.max(max_consecutive_low_tier)}")
+                
+                with col2:
+                    if low_tier_users:
+                        st.metric("Median Consecutive Low (when used)", f"{np.median(low_tier_users):.1f}")
+                
+                # Tier distribution chart
+                st.subheader("Spending Tier Distribution")
+                
+                tier_data = pd.DataFrame({
+                    'High Tier': tier_usage_high,
+                    'Medium Tier': tier_usage_med,
+                    'Low Tier': tier_usage_low
+                })
+                
+                fig = go.Figure()
+                fig.add_trace(go.Histogram(x=tier_usage_high, name='High Tier', marker_color='green', opacity=0.7, nbinsx=30))
+                fig.add_trace(go.Histogram(x=tier_usage_med, name='Med Tier', marker_color='yellow', opacity=0.7, nbinsx=30))
+                fig.add_trace(go.Histogram(x=tier_usage_low, name='Low Tier', marker_color='red', opacity=0.7, nbinsx=30))
+                
+                fig.update_layout(
+                    xaxis_title="Years Spent in Tier",
+                    yaxis_title="Number of Simulations",
+                    barmode='overlay',
+                    height=400
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Tier Timeline Visualization
+                st.subheader("Spending Tier Timeline")
+                st.markdown("*Showing spending tier by year across sample simulations*")
+                
+                sample_sims = min(20, len(tier_patterns))
+                
+                heatmap_data = []
+                sim_labels = []
+                
+                for i in range(sample_sims):
+                    if len(tier_patterns[i]) > 0:
+                        heatmap_data.append(tier_patterns[i])
+                        high_yrs = tier_usage_high[i]
+                        med_yrs = tier_usage_med[i]
+                        low_yrs = tier_usage_low[i]
+                        max_low = max_consecutive_low_tier[i]
+                        sim_labels.append(f"Sim {i+1} (H:{high_yrs} M:{med_yrs} L:{low_yrs}, max_low:{max_low})")
+                
+                if heatmap_data:
+                    fig = go.Figure(data=go.Heatmap(
+                        z=heatmap_data,
+                        x=list(range(1, years+1)),
+                        y=sim_labels,
+                        colorscale=[[0, 'green'], [0.5, 'yellow'], [1, 'red']],
+                        showscale=True,
+                        colorbar=dict(
+                            title="Tier",
+                            tickvals=[1, 2, 3],
+                            ticktext=["High", "Med", "Low"]
+                        ),
+                        zmin=1,
+                        zmax=3
+                    ))
+                    fig.update_layout(
+                        xaxis_title="Year",
+                        yaxis_title="Simulation",
+                        height=max(400, sample_sims * 25),
+                        yaxis=dict(autorange="reversed")
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption("🟢 Green = High Spend | 🟡 Yellow = Medium Spend | 🔴 Red = Low Spend")
+            
+            tab_idx_ai = tab_idx_ai_temp
+            tab_idx = tab_idx_temp
+        elif enable_guardrails:
             tab_idx_ai = tab5
             tab_idx = tab6
         else:
@@ -775,11 +1023,23 @@ TAX ASSUMPTIONS:
 - Low Spend Years Tax Drag: {low_spend_tax_drag*100:.0f}%
 
 SPENDING PLAN (After-Tax, Today's Dollars):
+"""
+            
+            if use_conditional_spend:
+                analysis_text += f"""- Spending Model: CONDITIONAL (Dynamic tier selection based on portfolio value)
+- Discount Rate: {discount_rate*100:.1f}%
+- High Spend Tier: ${high_spend_monthly:,.0f}/month
+- Medium Spend Tier: ${med_spend_monthly:,.0f}/month
+- Low Spend Tier: ${low_spend_monthly:,.0f}/month
+"""
+            else:
+                analysis_text += f"""- Spending Model: PLANNED (Fixed tiers by year)
 - High Spend Years (1-{high_spend_years}): ${high_spend_monthly:,.0f}/month
 - Medium Spend Years ({high_spend_years+1}-{high_spend_years+med_spend_years}): ${med_spend_monthly:,.0f}/month
 - Low Spend Years ({high_spend_years+med_spend_years+1}+): ${low_spend_monthly:,.0f}/month
-
-OTHER INCOME/EXPENSES:
+"""
+            
+            analysis_text += f"""OTHER INCOME/EXPENSES:
 - Mortgage: {"Yes" if has_mortgage else "No"}"""
 
             if has_mortgage and mortgage_balance > 0:
@@ -865,6 +1125,23 @@ GUARDRAILS USAGE:
                         analysis_text += f"""
 - Average Max Consecutive Years: {np.mean(max_consec_all):.1f}
 - Longest Consecutive Stretch: {np.max(max_consecutive_guardrails)}"""
+            
+            if use_conditional_spend:
+                analysis_text += f"""
+
+CONDITIONAL SPENDING ANALYSIS:
+- Spending Model: Dynamic (tier based on portfolio vs PV of needs)
+- Discount Rate Used: {discount_rate*100:.1f}%
+- Average Years High Tier: {np.mean(tier_usage_high):.1f}
+- Average Years Med Tier: {np.mean(tier_usage_med):.1f}
+- Average Years Low Tier: {np.mean(tier_usage_low):.1f}
+- Simulations Dropping to Low Tier: {100 * np.sum(np.array(tier_usage_low) > 0) / simulations:.1f}%"""
+                
+                low_tier_users = [m for m in max_consecutive_low_tier if m > 0]
+                if low_tier_users:
+                    analysis_text += f"""
+- Avg Max Consecutive Years in Low: {np.mean(low_tier_users):.1f}
+- Longest Stretch in Low Tier: {np.max(max_consecutive_low_tier)}"""
 
             if failure_years_list:
                 analysis_text += f"""
