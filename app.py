@@ -1129,24 +1129,24 @@ if run_simulation and total_allocation == 100:
                     )
                     st.plotly_chart(fig, use_container_width=True)
                     st.caption("🟢 Green = High Spend | 🟡 Yellow = Medium Spend | 🔴 Red = Low Spend")
-            
-            # Set tab indices based on configuration
-            if enable_guardrails and use_conditional_spend:
-                tab_lifestyle = tab6
-                tab_idx_ai = tab7
-                tab_idx = tab8
-            elif enable_guardrails:
-                tab_lifestyle = tab5
-                tab_idx_ai = tab6
-                tab_idx = tab7
-            elif use_conditional_spend:
-                tab_lifestyle = tab5
-                tab_idx_ai = tab6
-                tab_idx = tab7
-            else:
-                tab_lifestyle = tab4
-                tab_idx_ai = tab5
-                tab_idx = tab6
+        
+        # Set tab indices based on configuration (outside conditional block)
+        if enable_guardrails and use_conditional_spend:
+            tab_lifestyle = tab6
+            tab_idx_ai = tab7
+            tab_idx = tab8
+        elif enable_guardrails:
+            tab_lifestyle = tab5
+            tab_idx_ai = tab6
+            tab_idx = tab7
+        elif use_conditional_spend:
+            tab_lifestyle = tab5
+            tab_idx_ai = tab6
+            tab_idx = tab7
+        else:
+            tab_lifestyle = tab4
+            tab_idx_ai = tab5
+            tab_idx = tab6
         
         with tab_lifestyle:
             st.subheader("💰 Lifestyle Analysis")
