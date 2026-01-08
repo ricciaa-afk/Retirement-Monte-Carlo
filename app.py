@@ -164,15 +164,16 @@ else:
     ss_monthly = 0
     ss_start_year = 999  # Never starts
 
-# Temporary Income
-st.sidebar.subheader("💼 Temporary Earned Income")
-has_temp_income = st.sidebar.checkbox("Include Temporary Income", value=True)
-if has_temp_income:
-    temp_income_annual = st.sidebar.number_input("Annual Income ($, nominal)", min_value=0, max_value=1000000, value=120000, step=10000)
-    temp_income_years = st.sidebar.number_input("Income Duration (years)", min_value=0, max_value=20, value=3)
+# Delayed Retirement Income
+st.sidebar.subheader("💼 Delayed Retirement Income")
+has_delayed_income = st.sidebar.checkbox("Include Delayed Retirement Income", value=True)
+if has_delayed_income:
+    delayed_income_annual = st.sidebar.number_input("Annual Income ($, nominal)", min_value=0, max_value=1000000, value=120000, step=10000)
+    delayed_income_years = st.sidebar.number_input("Years Before Full Retirement", min_value=0, max_value=20, value=3, 
+        help="Work this many years before fully retiring")
 else:
-    temp_income_annual = 0
-    temp_income_years = 0
+    delayed_income_annual = 0
+    delayed_income_years = 0
 
 # Bucket Strategy - Defensive Withdrawal Rules
 st.sidebar.subheader("🛡️ Defensive Withdrawal Strategy")
@@ -250,6 +251,40 @@ if enable_guardrails:
     ) / 100
     
     st.sidebar.info(f"Guardrails activate if portfolio < ${guardrail_threshold:,.0f}. Resume normal at ${guardrail_threshold * (1 + recovery_buffer):,.0f}")
+    
+    # Contingency Income (Return to Work)
+    st.sidebar.markdown("**Contingency Income (Return to Work):**")
+    enable_contingency_income = st.sidebar.checkbox("Enable Contingency Income", value=False,
+        help="Return to work if guardrails trigger")
+    
+    if enable_contingency_income:
+        contingency_income_annual = st.sidebar.number_input(
+            "Annual Contingency Income ($, today's $)",
+            min_value=0,
+            max_value=500000,
+            value=50000,
+            step=5000,
+            help="Income from returning to work, inflation-adjusted"
+        )
+        contingency_min_years = st.sidebar.number_input(
+            "Minimum Years to Work",
+            min_value=1,
+            max_value=20,
+            value=2,
+            help="Minimum continuous years when contingency activated"
+        )
+        contingency_max_years = st.sidebar.number_input(
+            "Maximum Years to Work",
+            min_value=1,
+            max_value=20,
+            value=5,
+            help="Maximum continuous years when contingency activated"
+        )
+        st.sidebar.info(f"Work {contingency_min_years}-{contingency_max_years} years if guardrails activate")
+    else:
+        contingency_income_annual = 0
+        contingency_min_years = 0
+        contingency_max_years = 0
 
 # Run button
 run_simulation = st.sidebar.button("🚀 Run Simulation", type="primary", use_container_width=True)
@@ -323,6 +358,12 @@ if run_simulation and total_allocation == 100:
                     consecutive_low_tier = 0
                     max_consecutive_low = 0
                     tier_pattern = []
+                
+                # Contingency income tracking
+                if enable_guardrails and enable_contingency_income:
+                    contingency_active = False
+                    contingency_years_worked = 0
+                    contingency_target_years = 0  # Will be set when activated
                 
                 for year in range(years):
                     
@@ -435,8 +476,8 @@ if run_simulation and total_allocation == 100:
                             if year >= ss_start_year:
                                 ss_current = ss_monthly * 12 * ((1 + inflation_rate) ** (year - ss_start_year))
                                 high_net -= ss_current
-                            if year < temp_income_years:
-                                high_net -= temp_income_annual
+                            if year < delayed_income_years:
+                                high_net -= delayed_income_annual
                             high_net = max(high_net, 0)
                             
                             # Med tier net withdrawal
@@ -446,8 +487,8 @@ if run_simulation and total_allocation == 100:
                             med_net = med_gross
                             if year >= ss_start_year:
                                 med_net -= ss_current
-                            if year < temp_income_years:
-                                med_net -= temp_income_annual
+                            if year < delayed_income_years:
+                                med_net -= delayed_income_annual
                             med_net = max(med_net, 0)
                             
                             # Low tier net withdrawal  
@@ -457,8 +498,8 @@ if run_simulation and total_allocation == 100:
                             low_net = low_gross
                             if year >= ss_start_year:
                                 low_net -= ss_current
-                            if year < temp_income_years:
-                                low_net -= temp_income_annual
+                            if year < delayed_income_years:
+                                low_net -= delayed_income_annual
                             low_net = max(low_net, 0)
                             
                             # Calculate PV thresholds
@@ -542,9 +583,30 @@ if run_simulation and total_allocation == 100:
                     
                     net_spend_after_tax = max(annual_spend_after_tax - ss_annual, 0)
                     
-                    # Temporary earned income (after-tax)
-                    if year < temp_income_years:
-                        net_spend_after_tax = max(net_spend_after_tax - temp_income_annual, 0)
+                    # Delayed retirement income (after-tax)
+                    if year < delayed_income_years:
+                        net_spend_after_tax = max(net_spend_after_tax - delayed_income_annual, 0)
+                    
+                    # Contingency income (return to work if guardrails active)
+                    if enable_guardrails and enable_contingency_income:
+                        # Check if we should activate contingency income
+                        if guardrails_active and not contingency_active:
+                            # First year of guardrails - activate contingency income
+                            contingency_active = True
+                            contingency_years_worked = 0
+                            # Set target years (between min and max)
+                            contingency_target_years = np.random.randint(contingency_min_years, contingency_max_years + 1)
+                        
+                        # If contingency active, reduce withdrawals by inflated contingency income
+                        if contingency_active:
+                            contingency_income_inflated = contingency_income_annual * cumulative_inflation
+                            net_spend_after_tax = max(net_spend_after_tax - contingency_income_inflated, 0)
+                            contingency_years_worked += 1
+                            
+                            # Check if we've worked the target years
+                            if contingency_years_worked >= contingency_target_years:
+                                contingency_active = False
+                                contingency_years_worked = 0
                     
                     # Calculate gross withdrawal needed (before taxes)
                     if current_tax_drag > 0:
@@ -782,6 +844,57 @@ if run_simulation and total_allocation == 100:
                     height=400
                 )
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Year-by-year success probability
+                st.subheader("Success Probability by Year")
+                
+                # Calculate survival probability at end of each year
+                failure_counts = np.zeros(years, dtype=int)
+                for fail_year in failure_years_list:
+                    failure_counts[fail_year-1] += 1
+                
+                cumulative_failures = np.cumsum(failure_counts)
+                survival_prob = 1 - cumulative_failures / simulations
+                
+                # Find first year with failure
+                first_failure_year = min(failure_years_list)
+                
+                # Create table starting from first failure year
+                year_range = list(range(first_failure_year, years + 1))
+                survival_pcts = [survival_prob[y-1] * 100 for y in year_range]
+                failure_counts_display = [failure_counts[y-1] for y in year_range]
+                
+                df_survival = pd.DataFrame({
+                    'End of Year': year_range,
+                    'Success Probability': [f"{p:.2f}%" for p in survival_pcts],
+                    'Failures This Year': failure_counts_display
+                })
+                
+                # Display in two columns
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Probability of Success:**")
+                    # Display first half
+                    mid_point = len(df_survival) // 2
+                    st.dataframe(df_survival.iloc[:mid_point], hide_index=True, use_container_width=True)
+                
+                with col2:
+                    st.markdown("**&nbsp;**")  # Spacer for alignment
+                    # Display second half
+                    st.dataframe(df_survival.iloc[mid_point:], hide_index=True, use_container_width=True)
+                
+                # Summary stats
+                st.markdown("---")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    peak_failure_year = year_range[np.argmax(failure_counts_display)]
+                    st.metric("Peak Failure Year", f"Year {peak_failure_year}")
+                with col2:
+                    st.metric("Failures in Peak Year", f"{max(failure_counts_display)}")
+                with col3:
+                    avg_annual_failures = np.mean([f for f in failure_counts_display if f > 0])
+                    st.metric("Avg Failures/Year (when >0)", f"{avg_annual_failures:.1f}")
             else:
                 st.success("🎉 No failures occurred in any simulation!")
         
@@ -1056,10 +1169,10 @@ SPENDING PLAN (After-Tax, Today's Dollars):
                 analysis_text += f" (${ss_monthly:,.0f}/month starting year {ss_start_year})"
             
             analysis_text += f"""
-- Temporary Income: {"Yes" if has_temp_income else "No"}"""
+- Delayed Retirement Income: {"Yes" if has_delayed_income else "No"}"""
             
-            if has_temp_income:
-                analysis_text += f" (${temp_income_annual:,.0f}/year for {temp_income_years} years)"
+            if has_delayed_income:
+                analysis_text += f" (${delayed_income_annual:,.0f}/year for {delayed_income_years} years)"
 
             analysis_text += f"""
 
@@ -1077,6 +1190,10 @@ GUARDRAILS:
 - Spending Reductions: High {high_spend_cut*100:.0f}% / Med {med_spend_cut*100:.0f}% / Low {low_spend_cut*100:.0f}%
 - Defensive Allocation: {defensive_equity_pct}% / {defensive_bond_pct}% / {defensive_cash_pct}%
 - Recovery Buffer: {recovery_buffer*100:.0f}%"""
+                
+                if enable_contingency_income:
+                    analysis_text += f"""
+- Contingency Income: ${contingency_income_annual:,.0f}/year (work {contingency_min_years}-{contingency_max_years} years if triggered)"""
 
             analysis_text += f"""
 
