@@ -1485,7 +1485,7 @@ LIFESTYLE ANALYSIS:
 - Percentage at Low Spend (cut): {lifestyle_pcts[6]:.1f}%"""
             
             # Quality score
-            weights = {{1: 100, 2: 80, 3: 70, 4: 56, 5: 60, 6: 48}}
+            weights = {1: 100, 2: 80, 3: 70, 4: 56, 5: 60, 6: 48}
             weighted_scores = []
             for pattern in lifestyle_patterns:
                 score = sum(weights[cat] for cat in pattern) / len(pattern)
