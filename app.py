@@ -363,7 +363,7 @@ if run_simulation and total_allocation == 100:
                 if enable_guardrails and enable_contingency_income:
                     contingency_active = False
                     contingency_years_worked = 0
-                    contingency_target_years = 0  # Will be set when activated
+                    contingency_start_year = 0  # Track when guardrails first triggered
                 
                 for year in range(years):
                     
@@ -589,22 +589,35 @@ if run_simulation and total_allocation == 100:
                     
                     # Contingency income (return to work if guardrails active)
                     if enable_guardrails and enable_contingency_income:
-                        # Check if we should activate contingency income
+                        # Activate contingency ONLY on first guardrail trigger (not if already working)
                         if guardrails_active and not contingency_active:
-                            # First year of guardrails - activate contingency income
                             contingency_active = True
                             contingency_years_worked = 0
-                            # Set target years (between min and max)
-                            contingency_target_years = np.random.randint(contingency_min_years, contingency_max_years + 1)
+                            contingency_guardrail_initially_active = True
                         
-                        # If contingency active, reduce withdrawals by inflated contingency income
+                        # Once working, complete commitment regardless of subsequent guardrail changes
                         if contingency_active:
-                            contingency_income_inflated = contingency_income_annual * cumulative_inflation
-                            net_spend_after_tax = max(net_spend_after_tax - contingency_income_inflated, 0)
-                            contingency_years_worked += 1
+                            should_work = False
                             
-                            # Check if we've worked the target years
-                            if contingency_years_worked >= contingency_target_years:
+                            # Rule 1: Always work at least min_years
+                            if contingency_years_worked < contingency_min_years:
+                                should_work = True
+                            
+                            # Rule 2: Never work more than max_years
+                            elif contingency_years_worked >= contingency_max_years:
+                                should_work = False
+                            
+                            # Rule 3: Between min and max, work as long as guardrails stay active
+                            # (Check current guardrail status, but this is the ORIGINAL guardrail period)
+                            else:
+                                should_work = guardrails_active
+                            
+                            if should_work:
+                                contingency_income_inflated = contingency_income_annual * cumulative_inflation
+                                net_spend_after_tax = max(net_spend_after_tax - contingency_income_inflated, 0)
+                                contingency_years_worked += 1
+                            else:
+                                # Done with work commitment
                                 contingency_active = False
                                 contingency_years_worked = 0
                     
