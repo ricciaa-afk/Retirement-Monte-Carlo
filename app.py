@@ -320,6 +320,10 @@ if run_simulation and total_allocation == 100:
                 max_consecutive_low_tier = []
                 tier_patterns = []  # Track which tier each year: 1=high, 2=med, 3=low
             
+            # Lifestyle/spending tracking (actual spending including guardrail cuts)
+            lifestyle_patterns = []  # Track actual spending level each year
+            # Categories: 1=High, 2=High-cut, 3=Med, 4=Med-cut, 5=Low, 6=Low-cut
+            
             for sim in range(simulations):
                 
                 # Initialize portfolio buckets
@@ -364,6 +368,9 @@ if run_simulation and total_allocation == 100:
                     contingency_active = False
                     contingency_years_worked = 0
                     contingency_start_year = 0  # Track when guardrails first triggered
+                
+                # Lifestyle tracking
+                lifestyle_pattern = []  # Track actual spending level each year
                 
                 for year in range(years):
                     
@@ -566,6 +573,26 @@ if run_simulation and total_allocation == 100:
                     # Apply spending reduction (cut is percentage to reduce, not percentage to keep)
                     monthly_spend = monthly_spend * (1 - current_spending_cut)
                     
+                    # Track lifestyle category: 1=High, 2=High-cut, 3=Med, 4=Med-cut, 5=Low, 6=Low-cut
+                    if use_conditional_spend:
+                        # For conditional, current_tier is already set (1/2/3)
+                        if current_tier == 1:
+                            lifestyle_cat = 2 if (enable_guardrails and guardrails_active) else 1
+                        elif current_tier == 2:
+                            lifestyle_cat = 4 if (enable_guardrails and guardrails_active) else 3
+                        else:
+                            lifestyle_cat = 6 if (enable_guardrails and guardrails_active) else 5
+                    else:
+                        # For planned, determine from year
+                        if year < high_spend_years:
+                            lifestyle_cat = 2 if (enable_guardrails and guardrails_active) else 1
+                        elif year < (high_spend_years + med_spend_years):
+                            lifestyle_cat = 4 if (enable_guardrails and guardrails_active) else 3
+                        else:
+                            lifestyle_cat = 6 if (enable_guardrails and guardrails_active) else 5
+                    
+                    lifestyle_pattern.append(lifestyle_cat)
+                    
                     # Calculate after-tax spending need using cumulative inflation
                     annual_spend_after_tax = monthly_spend * 12 * cumulative_inflation
                     
@@ -722,6 +749,9 @@ if run_simulation and total_allocation == 100:
                     tier_usage_low.append(years_low_tier)
                     max_consecutive_low_tier.append(max_consecutive_low)
                     tier_patterns.append(tier_pattern)
+                
+                # Store lifestyle pattern
+                lifestyle_patterns.append(lifestyle_pattern)
         
         # Calculate results
         final_portfolios = np.array(final_portfolios)
@@ -759,13 +789,13 @@ if run_simulation and total_allocation == 100:
         
         # Tabs for different views
         if use_conditional_spend and enable_guardrails:
-            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "🎯 Conditional Spending", "🤖 AI Analysis Export", "📋 Detailed Stats"])
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "🎯 Conditional Spending", "💰 Lifestyle Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         elif use_conditional_spend:
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🎯 Conditional Spending", "🤖 AI Analysis Export", "📋 Detailed Stats"])
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🎯 Conditional Spending", "💰 Lifestyle Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         elif enable_guardrails:
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🚨 Guardrails Analysis", "💰 Lifestyle Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         else:
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Portfolio Distribution", "⏱️ Survival Curve", "📉 Failure Analysis", "💰 Lifestyle Analysis", "🤖 AI Analysis Export", "📋 Detailed Stats"])
         
         with tab1:
             st.subheader("Final Portfolio Distribution")
@@ -1100,14 +1130,144 @@ if run_simulation and total_allocation == 100:
                     st.plotly_chart(fig, use_container_width=True)
                     st.caption("🟢 Green = High Spend | 🟡 Yellow = Medium Spend | 🔴 Red = Low Spend")
             
-            tab_idx_ai = tab_idx_ai_temp
-            tab_idx = tab_idx_temp
+            tab_idx_lifestyle_temp = tab_idx_ai_temp
+            tab_idx_ai = tab_idx_ai_temp if not use_conditional_spend else tab_idx_ai_temp + 1
+            tab_idx = tab_idx_temp if not use_conditional_spend else tab_idx_temp + 1
         elif enable_guardrails:
+            tab_idx_lifestyle_temp = tab5
+            tab_idx_ai = tab6
+            tab_idx = tab7
+        else:
+            tab_idx_lifestyle_temp = tab4
             tab_idx_ai = tab5
             tab_idx = tab6
+        
+        # Lifestyle Analysis Tab
+        if use_conditional_spend and enable_guardrails:
+            tab_lifestyle = tab6
+        elif use_conditional_spend or enable_guardrails:
+            tab_lifestyle = tab5
         else:
-            tab_idx_ai = tab4
-            tab_idx = tab5
+            tab_lifestyle = tab4
+        
+        with tab_lifestyle:
+            st.subheader("💰 Lifestyle Analysis")
+            st.markdown("*What does your actual spending look like across all scenarios?*")
+            
+            # Calculate years in each lifestyle category
+            lifestyle_counts = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
+            
+            for pattern in lifestyle_patterns:
+                for cat in range(1, 7):
+                    count = pattern.count(cat)
+                    lifestyle_counts[cat].append(count)
+            
+            # Display metrics
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**High Spend Tier:**")
+                st.metric("Avg Years at High Spend", f"{np.mean(lifestyle_counts[1]):.1f}")
+                if enable_guardrails:
+                    st.metric("Avg Years at High Spend (w/ cuts)", f"{np.mean(lifestyle_counts[2]):.1f}")
+                    cut_pct = high_spend_cut * 100 if enable_guardrails else 0
+                    st.caption(f"*High with cuts = {100-cut_pct:.0f}% of normal High*")
+            
+            with col2:
+                st.markdown("**Medium Spend Tier:**")
+                st.metric("Avg Years at Med Spend", f"{np.mean(lifestyle_counts[3]):.1f}")
+                if enable_guardrails:
+                    st.metric("Avg Years at Med Spend (w/ cuts)", f"{np.mean(lifestyle_counts[4]):.1f}")
+                    cut_pct = med_spend_cut * 100 if enable_guardrails else 0
+                    st.caption(f"*Med with cuts = {100-cut_pct:.0f}% of normal Med*")
+            
+            with col3:
+                st.markdown("**Low Spend Tier:**")
+                st.metric("Avg Years at Low Spend", f"{np.mean(lifestyle_counts[5]):.1f}")
+                if enable_guardrails:
+                    st.metric("Avg Years at Low Spend (w/ cuts)", f"{np.mean(lifestyle_counts[6]):.1f}")
+                    cut_pct = low_spend_cut * 100 if enable_guardrails else 0
+                    st.caption(f"*Low with cuts = {100-cut_pct:.0f}% of normal Low*")
+            
+            # Distribution chart
+            st.subheader("Lifestyle Distribution Across Simulations")
+            
+            fig = go.Figure()
+            
+            colors = {
+                1: 'darkgreen',
+                2: 'lightgreen',
+                3: 'gold',
+                4: 'yellow',
+                5: 'orangered',
+                6: 'lightcoral'
+            }
+            
+            labels = {
+                1: 'High Spend',
+                2: 'High Spend (cut)',
+                3: 'Med Spend',
+                4: 'Med Spend (cut)',
+                5: 'Low Spend',
+                6: 'Low Spend (cut)'
+            }
+            
+            for cat in range(1, 7):
+                if np.sum(lifestyle_counts[cat]) > 0:  # Only show if used
+                    fig.add_trace(go.Histogram(
+                        x=lifestyle_counts[cat],
+                        name=labels[cat],
+                        marker_color=colors[cat],
+                        opacity=0.7,
+                        nbinsx=30
+                    ))
+            
+            fig.update_layout(
+                xaxis_title="Years in Lifestyle Category",
+                yaxis_title="Number of Simulations",
+                barmode='overlay',
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Summary percentages
+            st.subheader("Average Lifestyle Mix")
+            total_years = years
+            
+            lifestyle_pcts = {}
+            for cat in range(1, 7):
+                pct = (np.mean(lifestyle_counts[cat]) / total_years) * 100
+                lifestyle_pcts[cat] = pct
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Percentage of Retirement:**")
+                st.write(f"• High Spend: {lifestyle_pcts[1]:.1f}%")
+                if enable_guardrails and lifestyle_pcts[2] > 0:
+                    st.write(f"• High Spend (cut): {lifestyle_pcts[2]:.1f}%")
+                st.write(f"• Med Spend: {lifestyle_pcts[3]:.1f}%")
+                if enable_guardrails and lifestyle_pcts[4] > 0:
+                    st.write(f"• Med Spend (cut): {lifestyle_pcts[4]:.1f}%")
+                st.write(f"• Low Spend: {lifestyle_pcts[5]:.1f}%")
+                if enable_guardrails and lifestyle_pcts[6] > 0:
+                    st.write(f"• Low Spend (cut): {lifestyle_pcts[6]:.1f}%")
+            
+            with col2:
+                # Overall quality of life metric
+                st.markdown("**Overall Lifestyle Quality:**")
+                
+                # Weighted score: High=100, High-cut=80, Med=70, Med-cut=56, Low=60, Low-cut=48
+                weights = {1: 100, 2: 80, 3: 70, 4: 56, 5: 60, 6: 48}
+                
+                weighted_scores = []
+                for pattern in lifestyle_patterns:
+                    score = sum(weights[cat] for cat in pattern) / len(pattern)
+                    weighted_scores.append(score)
+                
+                avg_score = np.mean(weighted_scores)
+                st.metric("Avg Quality Score", f"{avg_score:.1f}/100")
+                st.caption("*Higher = better lifestyle (weighted by spending level)*")
         
         with tab_idx_ai:
             st.subheader("🤖 AI Analysis Export")
