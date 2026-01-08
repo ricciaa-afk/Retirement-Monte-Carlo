@@ -1130,25 +1130,23 @@ if run_simulation and total_allocation == 100:
                     st.plotly_chart(fig, use_container_width=True)
                     st.caption("🟢 Green = High Spend | 🟡 Yellow = Medium Spend | 🔴 Red = Low Spend")
             
-            tab_idx_lifestyle_temp = tab_idx_ai_temp
-            tab_idx_ai = tab_idx_ai_temp if not use_conditional_spend else tab_idx_ai_temp + 1
-            tab_idx = tab_idx_temp if not use_conditional_spend else tab_idx_temp + 1
-        elif enable_guardrails:
-            tab_idx_lifestyle_temp = tab5
-            tab_idx_ai = tab6
-            tab_idx = tab7
-        else:
-            tab_idx_lifestyle_temp = tab4
-            tab_idx_ai = tab5
-            tab_idx = tab6
-        
-        # Lifestyle Analysis Tab
-        if use_conditional_spend and enable_guardrails:
-            tab_lifestyle = tab6
-        elif use_conditional_spend or enable_guardrails:
-            tab_lifestyle = tab5
-        else:
-            tab_lifestyle = tab4
+            # Set tab indices based on configuration
+            if enable_guardrails and use_conditional_spend:
+                tab_lifestyle = tab6
+                tab_idx_ai = tab7
+                tab_idx = tab8
+            elif enable_guardrails:
+                tab_lifestyle = tab5
+                tab_idx_ai = tab6
+                tab_idx = tab7
+            elif use_conditional_spend:
+                tab_lifestyle = tab5
+                tab_idx_ai = tab6
+                tab_idx = tab7
+            else:
+                tab_lifestyle = tab4
+                tab_idx_ai = tab5
+                tab_idx = tab6
         
         with tab_lifestyle:
             st.subheader("💰 Lifestyle Analysis")
@@ -1432,6 +1430,70 @@ CONDITIONAL SPENDING ANALYSIS:
                     analysis_text += f"""
 - Avg Max Consecutive Years in Low: {np.mean(low_tier_users):.1f}
 - Longest Stretch in Low Tier: {np.max(max_consecutive_low_tier)}"""
+            
+            # Lifestyle Analysis
+            lifestyle_counts = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
+            for pattern in lifestyle_patterns:
+                for cat in range(1, 7):
+                    count = pattern.count(cat)
+                    lifestyle_counts[cat].append(count)
+            
+            analysis_text += f"""
+
+LIFESTYLE ANALYSIS:
+- Average Years at High Spend: {np.mean(lifestyle_counts[1]):.1f}"""
+            
+            if enable_guardrails:
+                analysis_text += f"""
+- Average Years at High Spend (w/ cuts): {np.mean(lifestyle_counts[2]):.1f}"""
+            
+            analysis_text += f"""
+- Average Years at Med Spend: {np.mean(lifestyle_counts[3]):.1f}"""
+            
+            if enable_guardrails:
+                analysis_text += f"""
+- Average Years at Med Spend (w/ cuts): {np.mean(lifestyle_counts[4]):.1f}"""
+            
+            analysis_text += f"""
+- Average Years at Low Spend: {np.mean(lifestyle_counts[5]):.1f}"""
+            
+            if enable_guardrails:
+                analysis_text += f"""
+- Average Years at Low Spend (w/ cuts): {np.mean(lifestyle_counts[6]):.1f}"""
+            
+            # Lifestyle percentages
+            total_years_calc = years
+            lifestyle_pcts = {}
+            for cat in range(1, 7):
+                pct = (np.mean(lifestyle_counts[cat]) / total_years_calc) * 100
+                lifestyle_pcts[cat] = pct
+            
+            analysis_text += f"""
+- Percentage at High Spend: {lifestyle_pcts[1]:.1f}%"""
+            if enable_guardrails and lifestyle_pcts[2] > 0.1:
+                analysis_text += f"""
+- Percentage at High Spend (cut): {lifestyle_pcts[2]:.1f}%"""
+            analysis_text += f"""
+- Percentage at Med Spend: {lifestyle_pcts[3]:.1f}%"""
+            if enable_guardrails and lifestyle_pcts[4] > 0.1:
+                analysis_text += f"""
+- Percentage at Med Spend (cut): {lifestyle_pcts[4]:.1f}%"""
+            analysis_text += f"""
+- Percentage at Low Spend: {lifestyle_pcts[5]:.1f}%"""
+            if enable_guardrails and lifestyle_pcts[6] > 0.1:
+                analysis_text += f"""
+- Percentage at Low Spend (cut): {lifestyle_pcts[6]:.1f}%"""
+            
+            # Quality score
+            weights = {{1: 100, 2: 80, 3: 70, 4: 56, 5: 60, 6: 48}}
+            weighted_scores = []
+            for pattern in lifestyle_patterns:
+                score = sum(weights[cat] for cat in pattern) / len(pattern)
+                weighted_scores.append(score)
+            avg_score = np.mean(weighted_scores)
+            
+            analysis_text += f"""
+- Overall Lifestyle Quality Score: {avg_score:.1f}/100"""
 
             if failure_years_list:
                 analysis_text += f"""
