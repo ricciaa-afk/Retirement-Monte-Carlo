@@ -1168,24 +1168,55 @@ if run_simulation and total_allocation == 100:
                 st.metric("Avg Years at High Spend", f"{np.mean(lifestyle_counts[1]):.1f}")
                 if enable_guardrails:
                     st.metric("Avg Years at High Spend (w/ cuts)", f"{np.mean(lifestyle_counts[2]):.1f}")
-                    cut_pct = high_spend_cut * 100 if enable_guardrails else 0
-                    st.caption(f"*High with cuts = {100-cut_pct:.0f}% of normal High*")
+                    # Show duration when actually used
+                    users_high_cut = [c for c in lifestyle_counts[2] if c > 0]
+                    if users_high_cut:
+                        st.caption(f"*When cuts used: {np.mean(users_high_cut):.1f} years avg*")
+                        st.caption(f"*Used in {len(users_high_cut)/len(lifestyle_counts[2])*100:.1f}% of sims*")
             
             with col2:
                 st.markdown("**Medium Spend Tier:**")
                 st.metric("Avg Years at Med Spend", f"{np.mean(lifestyle_counts[3]):.1f}")
                 if enable_guardrails:
                     st.metric("Avg Years at Med Spend (w/ cuts)", f"{np.mean(lifestyle_counts[4]):.1f}")
-                    cut_pct = med_spend_cut * 100 if enable_guardrails else 0
-                    st.caption(f"*Med with cuts = {100-cut_pct:.0f}% of normal Med*")
+                    # Show duration when actually used
+                    users_med_cut = [c for c in lifestyle_counts[4] if c > 0]
+                    if users_med_cut:
+                        st.caption(f"*When cuts used: {np.mean(users_med_cut):.1f} years avg*")
+                        st.caption(f"*Used in {len(users_med_cut)/len(lifestyle_counts[4])*100:.1f}% of sims*")
             
             with col3:
                 st.markdown("**Low Spend Tier:**")
                 st.metric("Avg Years at Low Spend", f"{np.mean(lifestyle_counts[5]):.1f}")
                 if enable_guardrails:
                     st.metric("Avg Years at Low Spend (w/ cuts)", f"{np.mean(lifestyle_counts[6]):.1f}")
-                    cut_pct = low_spend_cut * 100 if enable_guardrails else 0
-                    st.caption(f"*Low with cuts = {100-cut_pct:.0f}% of normal Low*")
+                    # Show duration when actually used
+                    users_low_cut = [c for c in lifestyle_counts[6] if c > 0]
+                    if users_low_cut:
+                        st.caption(f"*When cuts used: {np.mean(users_low_cut):.1f} years avg*")
+                        st.caption(f"*Used in {len(users_low_cut)/len(lifestyle_counts[6])*100:.1f}% of sims*")
+            
+            # Add summary of total time with ANY cuts
+            if enable_guardrails:
+                st.markdown("---")
+                st.markdown("**Overall Spending Cuts Summary:**")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Total years with any cuts (across all sims)
+                    total_cut_years = []
+                    for pattern in lifestyle_patterns:
+                        cut_years = sum(1 for cat in pattern if cat in [2, 4, 6])
+                        total_cut_years.append(cut_years)
+                    
+                    st.metric("Avg Years w/ ANY Cuts (all sims)", f"{np.mean(total_cut_years):.1f}")
+                
+                with col2:
+                    # When cuts are used, how long
+                    sims_with_cuts = [y for y in total_cut_years if y > 0]
+                    if sims_with_cuts:
+                        st.metric("Avg Years w/ Cuts (when used)", f"{np.mean(sims_with_cuts):.1f}")
+                        st.caption(f"*{len(sims_with_cuts)/len(total_cut_years)*100:.1f}% of sims use cuts*")
             
             # Distribution chart
             st.subheader("Lifestyle Distribution Across Simulations")
