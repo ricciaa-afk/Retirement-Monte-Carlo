@@ -906,9 +906,11 @@ if run_simulation and total_allocation == 100:
                     st.metric("Median Failure Year", f"{np.median(failure_years_list):.0f}")
                 
                 # Home equity at failure
+                st.markdown("---")
+                st.subheader("Home Equity at Failure")
+                st.caption(f"*Data available for {len(failure_home_equity)} of {len(failure_years_list)} failures*")
+                
                 if failure_home_equity:  # Only show if we have failure data
-                    st.markdown("---")
-                    st.subheader("Home Equity at Failure")
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
@@ -922,6 +924,8 @@ if run_simulation and total_allocation == 100:
                         st.metric("Min Home Equity", f"${np.min(failure_home_equity):,.0f}")
                     
                     st.info(f"💡 Failed retirements still had average ${np.mean(failure_home_equity):,.0f} in home equity. This is an asset that could be tapped (HELOC, reverse mortgage, downsizing) to extend retirement.")
+                else:
+                    st.warning("Home equity data not available for failures")
                 
                 # Failure distribution histogram
                 st.subheader("When Do Failures Occur?")
