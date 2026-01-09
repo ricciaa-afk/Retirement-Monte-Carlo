@@ -20,8 +20,8 @@ initial_portfolio = st.sidebar.number_input("Initial Portfolio ($)", min_value=0
 # Asset Allocation
 st.sidebar.subheader("📈 Asset Allocation (Normal Mode)")
 equity_pct = st.sidebar.slider("Equities (%)", min_value=0, max_value=100, value=80)
-bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=15)
-cash_pct = st.sidebar.slider("Cash (%)", min_value=0, max_value=100, value=5)
+bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=0)
+cash_pct = st.sidebar.slider("Cash (%)", min_value=0, max_value=100, value=20)
 
 total_allocation = equity_pct + bond_pct + cash_pct
 if total_allocation != 100:
@@ -35,11 +35,11 @@ asset_mix = {
 
 # Returns
 st.sidebar.subheader("💰 Expected Returns (Annual)")
-equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.08, step=0.005, format="%.3f")
-equity_vol = st.sidebar.slider("Equity Volatility", min_value=0.0, max_value=0.30, value=0.18, step=0.01, format="%.2f")
+equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.07, step=0.005, format="%.3f")
+equity_vol = st.sidebar.slider("Equity Volatility", min_value=0.0, max_value=0.30, value=0.17, step=0.01, format="%.2f")
 bond_return = st.sidebar.slider("Bond Return", min_value=0.0, max_value=0.15, value=0.03, step=0.005, format="%.3f")
 bond_vol = st.sidebar.slider("Bond Volatility", min_value=0.0, max_value=0.15, value=0.06, step=0.01, format="%.2f")
-cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, value=0.01, step=0.005, format="%.3f")
+cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, value=0.025, step=0.005, format="%.3f")
 inflation_rate = st.sidebar.slider("Inflation Rate", min_value=0.0, max_value=0.10, value=0.02, step=0.005, format="%.3f")
 inflation_vol = st.sidebar.slider("Inflation Volatility", min_value=0.0, max_value=0.05, value=0.01, step=0.005, format="%.3f", help="Standard deviation of annual inflation")
 
@@ -85,7 +85,7 @@ high_spend_tax_drag = st.sidebar.slider(
     "High Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
-    value=5, 
+    value=4, 
     step=1,
     help="Early years: pulling from taxable accounts, cap gains treatment"
 ) / 100
@@ -94,7 +94,7 @@ med_spend_tax_drag = st.sidebar.slider(
     "Medium Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
-    value=12, 
+    value=5, 
     step=1,
     help="Middle years: RMDs start, mix of account types"
 ) / 100
@@ -103,7 +103,7 @@ low_spend_tax_drag = st.sidebar.slider(
     "Low Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
-    value=15, 
+    value=12, 
     step=1,
     help="Later years: higher RMDs, more ordinary income"
 ) / 100
@@ -173,7 +173,7 @@ else:
 
 # Delayed Retirement Income
 st.sidebar.subheader("💼 Delayed Retirement Income")
-has_delayed_income = st.sidebar.checkbox("Include Delayed Retirement Income", value=True)
+has_delayed_income = st.sidebar.checkbox("Include Delayed Retirement Income", value=False)
 if has_delayed_income:
     delayed_income_annual = st.sidebar.number_input("Annual Income ($, nominal)", min_value=0, max_value=1000000, value=120000, step=10000)
     delayed_income_years = st.sidebar.number_input("Years Before Full Retirement", min_value=0, max_value=20, value=3, 
@@ -235,9 +235,9 @@ if enable_guardrails:
     
     st.sidebar.markdown("**Defensive Allocation (when triggered):**")
     
-    defensive_equity_pct = st.sidebar.slider("Defensive Equities (%)", min_value=0, max_value=100, value=50, key="def_eq")
-    defensive_bond_pct = st.sidebar.slider("Defensive Bonds (%)", min_value=0, max_value=100, value=40, key="def_bond")
-    defensive_cash_pct = st.sidebar.slider("Defensive Cash (%)", min_value=0, max_value=100, value=10, key="def_cash")
+    defensive_equity_pct = st.sidebar.slider("Defensive Equities (%)", min_value=0, max_value=100, value=80, key="def_eq")
+    defensive_bond_pct = st.sidebar.slider("Defensive Bonds (%)", min_value=0, max_value=100, value=0, key="def_bond")
+    defensive_cash_pct = st.sidebar.slider("Defensive Cash (%)", min_value=0, max_value=100, value=20, key="def_cash")
     
     defensive_allocation_total = defensive_equity_pct + defensive_bond_pct + defensive_cash_pct
     if defensive_allocation_total != 100:
@@ -755,8 +755,12 @@ if run_simulation and total_allocation == 100:
                         success = False
                         failure_years_list.append(year + 1)
                         # Calculate home equity at failure
-                        home_equity_at_failure = current_home_value - remaining_mortgage_balance
-                        failure_home_equity.append(home_equity_at_failure)
+                        try:
+                            home_equity_at_failure = current_home_value - remaining_mortgage_balance
+                            failure_home_equity.append(home_equity_at_failure)
+                        except Exception as e:
+                            # Fallback if variables not available
+                            failure_home_equity.append(0)
                         break
                 
                 # Check max consecutive one final time at end
