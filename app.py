@@ -906,21 +906,22 @@ if run_simulation and total_allocation == 100:
                     st.metric("Median Failure Year", f"{np.median(failure_years_list):.0f}")
                 
                 # Home equity at failure
-                st.markdown("---")
-                st.subheader("Home Equity at Failure")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("Average Home Equity", f"${np.mean(failure_home_equity):,.0f}")
-                    st.caption("*Net of remaining mortgage*")
-                
-                with col2:
-                    st.metric("Median Home Equity", f"${np.median(failure_home_equity):,.0f}")
-                
-                with col3:
-                    st.metric("Min Home Equity", f"${np.min(failure_home_equity):,.0f}")
-                
-                st.info(f"💡 Failed retirements still had average ${np.mean(failure_home_equity):,.0f} in home equity. This is an asset that could be tapped (HELOC, reverse mortgage, downsizing) to extend retirement.")
+                if failure_home_equity:  # Only show if we have failure data
+                    st.markdown("---")
+                    st.subheader("Home Equity at Failure")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Average Home Equity", f"${np.mean(failure_home_equity):,.0f}")
+                        st.caption("*Net of remaining mortgage*")
+                    
+                    with col2:
+                        st.metric("Median Home Equity", f"${np.median(failure_home_equity):,.0f}")
+                    
+                    with col3:
+                        st.metric("Min Home Equity", f"${np.min(failure_home_equity):,.0f}")
+                    
+                    st.info(f"💡 Failed retirements still had average ${np.mean(failure_home_equity):,.0f} in home equity. This is an asset that could be tapped (HELOC, reverse mortgage, downsizing) to extend retirement.")
                 
                 # Failure distribution histogram
                 st.subheader("When Do Failures Occur?")
@@ -1585,9 +1586,14 @@ FAILURE ANALYSIS:
 - Earliest Failure: Year {min(failure_years_list)}
 - Latest Failure: Year {max(failure_years_list)}
 - Average Failure Year: {np.mean(failure_years_list):.1f}
-- Median Failure Year: {np.median(failure_years_list):.0f}
+- Median Failure Year: {np.median(failure_years_list):.0f}"""
+                
+                if failure_home_equity:
+                    analysis_text += f"""
 - Average Home Equity at Failure: ${np.mean(failure_home_equity):,.0f}
-- Median Home Equity at Failure: ${np.median(failure_home_equity):,.0f}
+- Median Home Equity at Failure: ${np.median(failure_home_equity):,.0f}"""
+                
+                analysis_text += """
 """
             else:
                 analysis_text += f"""
