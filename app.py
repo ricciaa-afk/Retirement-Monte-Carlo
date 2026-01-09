@@ -134,7 +134,7 @@ else:
     st.sidebar.markdown("*Spending follows planned year-based tiers*")
 
 # Mortgage
-st.sidebar.subheader("🏠 Mortgage")
+st.sidebar.subheader("🏠 Mortgage & Home")
 has_mortgage = st.sidebar.checkbox("Include Mortgage", value=True)
 if has_mortgage:
     mortgage_balance = st.sidebar.number_input("Mortgage Balance ($)", min_value=0, max_value=5000000, value=363400, step=10000)
@@ -153,6 +153,13 @@ else:
     mortgage_balance = 0
     annual_mortgage = 0
     mortgage_term_years = 0
+
+# Home value (separate from mortgage - can have home without mortgage)
+st.sidebar.markdown("**Home Value:**")
+home_value = st.sidebar.number_input("Current Home Value ($)", min_value=0, max_value=10000000, value=900000, step=50000,
+    help="Current market value of home")
+home_appreciation_rate = st.sidebar.slider("Home Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.0, step=0.5,
+    help="Annual appreciation rate for home value") / 100
 
 # Social Security
 st.sidebar.subheader("👴 Social Security")
@@ -301,6 +308,7 @@ if run_simulation and total_allocation == 100:
             final_portfolios = []
             success_flags = []
             failure_years_list = []
+            failure_home_equity = []  # Track home equity at failure
             
             years_go = []
             years_slow = []
@@ -345,6 +353,10 @@ if run_simulation and total_allocation == 100:
                 max_consecutive = 0
                 guardrail_pattern = []  # Track each year: 1=active, 0=inactive
                 cumulative_inflation = 1.0  # Track cumulative inflation multiplier
+                
+                # Home equity tracking
+                current_home_value = home_value
+                remaining_mortgage_balance = mortgage_balance
                 
                 # Inflation regime tracking
                 if use_inflation_regimes:
@@ -425,6 +437,25 @@ if run_simulation and total_allocation == 100:
                     
                     market_index *= (1 + equity_r)
                     market_high = max(market_high, market_index)
+                    
+                    # Update home value with appreciation
+                    current_home_value *= (1 + home_appreciation_rate)
+                    
+                    # Update remaining mortgage balance (amortization)
+                    if has_mortgage and remaining_mortgage_balance > 0 and year < mortgage_term_years:
+                        # Calculate principal paid this year
+                        monthly_rate = mortgage_rate / 12
+                        months_remaining = (mortgage_term_years - year) * 12
+                        if months_remaining > 0:
+                            # Mortgage payment already calculated above
+                            monthly_payment = mortgage_balance * monthly_rate / (1 - (1 + monthly_rate) ** (-mortgage_term_years * 12))
+                            # Calculate remaining balance after this year's payments
+                            for month in range(12):
+                                if remaining_mortgage_balance > 0:
+                                    interest_payment = remaining_mortgage_balance * monthly_rate
+                                    principal_payment = monthly_payment - interest_payment
+                                    remaining_mortgage_balance -= principal_payment
+                            remaining_mortgage_balance = max(0, remaining_mortgage_balance)
                     
                     # Check portfolio value for guardrails
                     current_portfolio = equities + bonds + cash
@@ -723,6 +754,9 @@ if run_simulation and total_allocation == 100:
                     if equities + bonds + cash <= 0:
                         success = False
                         failure_years_list.append(year + 1)
+                        # Calculate home equity at failure
+                        home_equity_at_failure = current_home_value - remaining_mortgage_balance
+                        failure_home_equity.append(home_equity_at_failure)
                         break
                 
                 # Check max consecutive one final time at end
@@ -870,6 +904,23 @@ if run_simulation and total_allocation == 100:
                 with col2:
                     st.metric("Average Failure Year", f"{np.mean(failure_years_list):.1f}")
                     st.metric("Median Failure Year", f"{np.median(failure_years_list):.0f}")
+                
+                # Home equity at failure
+                st.markdown("---")
+                st.subheader("Home Equity at Failure")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Average Home Equity", f"${np.mean(failure_home_equity):,.0f}")
+                    st.caption("*Net of remaining mortgage*")
+                
+                with col2:
+                    st.metric("Median Home Equity", f"${np.median(failure_home_equity):,.0f}")
+                
+                with col3:
+                    st.metric("Min Home Equity", f"${np.min(failure_home_equity):,.0f}")
+                
+                st.info(f"💡 Failed retirements still had average ${np.mean(failure_home_equity):,.0f} in home equity. This is an asset that could be tapped (HELOC, reverse mortgage, downsizing) to extend retirement.")
                 
                 # Failure distribution histogram
                 st.subheader("When Do Failures Occur?")
@@ -1365,6 +1416,7 @@ SPENDING PLAN (After-Tax, Today's Dollars):
                 analysis_text += f" (${mortgage_balance:,.0f} @ {mortgage_rate*100:.2f}%, {mortgage_term_years} years, ${mort_pmt:,.0f}/month)"
             
             analysis_text += f"""
+- Home Value: ${home_value:,.0f} (appreciating at {home_appreciation_rate*100:.1f}% annually)
 - Social Security: {"Yes" if has_ss else "No"}"""
             
             if has_ss:
@@ -1534,6 +1586,8 @@ FAILURE ANALYSIS:
 - Latest Failure: Year {max(failure_years_list)}
 - Average Failure Year: {np.mean(failure_years_list):.1f}
 - Median Failure Year: {np.median(failure_years_list):.0f}
+- Average Home Equity at Failure: ${np.mean(failure_home_equity):,.0f}
+- Median Home Equity at Failure: ${np.median(failure_home_equity):,.0f}
 """
             else:
                 analysis_text += f"""
