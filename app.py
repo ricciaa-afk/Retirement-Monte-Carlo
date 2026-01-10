@@ -380,6 +380,7 @@ if run_simulation and total_allocation == 100:
                     contingency_active = False
                     contingency_years_worked = 0
                     contingency_start_year = 0  # Track when guardrails first triggered
+                    contingency_already_used = False  # NEW: Track if we've already used this option
                 
                 # Lifestyle tracking
                 lifestyle_pattern = []  # Track actual spending level each year
@@ -647,10 +648,11 @@ if run_simulation and total_allocation == 100:
                     
                     # Contingency income (return to work if guardrails active)
                     if enable_guardrails and enable_contingency_income:
-                        # Activate contingency ONLY on first guardrail trigger (not if already working)
-                        if guardrails_active and not contingency_active:
+                        # Activate contingency ONLY on first guardrail trigger AND if not already used
+                        if guardrails_active and not contingency_active and not contingency_already_used:
                             contingency_active = True
                             contingency_years_worked = 0
+                            contingency_already_used = True  # Mark as used - can't use again
                             contingency_guardrail_initially_active = True
                         
                         # Once working, complete commitment regardless of subsequent guardrail changes
@@ -675,7 +677,7 @@ if run_simulation and total_allocation == 100:
                                 net_spend_after_tax = max(net_spend_after_tax - contingency_income_inflated, 0)
                                 contingency_years_worked += 1
                             else:
-                                # Done with work commitment
+                                # Done with work commitment - can't use again
                                 contingency_active = False
                                 contingency_years_worked = 0
                     
