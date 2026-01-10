@@ -750,6 +750,7 @@ if run_simulation and total_allocation == 100:
                             equities = total * target_mix['equities']
                             bonds = total * target_mix['bonds']
                             cash = total * target_mix['cash']
+                    
                     if equities + bonds + cash <= 0:
                         success = False
                         failure_years_list.append(year + 1)
