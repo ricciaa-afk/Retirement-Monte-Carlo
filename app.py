@@ -754,26 +754,24 @@ if run_simulation and total_allocation == 100:
                         success = False
                         failure_years_list.append(year + 1)
                         
-                        # Calculate home equity at failure - simple direct calculation
-                        # Home value appreciated for 'year' years
-                        failure_home_value = home_value * ((1 + home_appreciation_rate) ** year)
+                        # DIRECT CALCULATION - NO EXCEPTIONS POSSIBLE
+                        # Calculate home equity at failure
+                        hv = home_value * ((1 + home_appreciation_rate) ** year)
                         
-                        # Calculate remaining mortgage if applicable
-                        failure_mortgage_remaining = 0
+                        # Calculate remaining mortgage
+                        mr = 0.0
                         if has_mortgage and mortgage_balance > 0 and year < mortgage_term_years:
-                            # Calculate remaining balance using amortization formula
-                            monthly_rate = mortgage_rate / 12
-                            total_months = mortgage_term_years * 12
-                            months_elapsed = year * 12
-                            months_remaining = total_months - months_elapsed
+                            mrate = mortgage_rate / 12.0
+                            tot_m = mortgage_term_years * 12.0
+                            elapsed_m = year * 12.0
+                            remain_m = tot_m - elapsed_m
                             
-                            if months_remaining > 0:
-                                monthly_payment = mortgage_balance * monthly_rate / (1 - (1 + monthly_rate) ** (-total_months))
-                                # Remaining balance formula
-                                failure_mortgage_remaining = monthly_payment * ((1 - (1 + monthly_rate) ** (-months_remaining)) / monthly_rate)
+                            if remain_m > 0:
+                                mpmt = mortgage_balance * mrate / (1.0 - (1.0 + mrate) ** (-tot_m))
+                                mr = mpmt * ((1.0 - (1.0 + mrate) ** (-remain_m)) / mrate)
                         
-                        home_equity_at_failure = failure_home_value - failure_mortgage_remaining
-                        failure_home_equity.append(home_equity_at_failure)
+                        he = hv - mr
+                        failure_home_equity.append(he)
                         break
                 
                 # Check max consecutive one final time at end
@@ -923,11 +921,10 @@ if run_simulation and total_allocation == 100:
                     st.metric("Median Failure Year", f"{np.median(failure_years_list):.0f}")
                 
                 # Home equity at failure
-                st.markdown("---")
-                st.subheader("Home Equity at Failure")
-                st.caption(f"*Data available for {len(failure_home_equity)} of {len(failure_years_list)} failures*")
-                
-                if failure_home_equity:  # Only show if we have failure data
+                if len(failure_home_equity) > 0:
+                    st.markdown("---")
+                    st.subheader("Home Equity at Failure")
+                    
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
@@ -942,7 +939,7 @@ if run_simulation and total_allocation == 100:
                     
                     st.info(f"💡 Failed retirements still had average ${np.mean(failure_home_equity):,.0f} in home equity. This is an asset that could be tapped (HELOC, reverse mortgage, downsizing) to extend retirement.")
                 else:
-                    st.warning("Home equity data not available for failures")
+                    st.warning(f"⚠️ Debug: failure_home_equity list length = {len(failure_home_equity)}, failure_years_list length = {len(failure_years_list)}")
                 
                 # Failure distribution histogram
                 st.subheader("When Do Failures Occur?")
