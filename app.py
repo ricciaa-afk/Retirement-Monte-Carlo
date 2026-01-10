@@ -693,6 +693,21 @@ if run_simulation and total_allocation == 100:
                     if gross_withdrawal >= total:
                         success = False
                         failure_years_list.append(year + 1)
+                        
+                        # Calculate home equity at failure
+                        hv = home_value * ((1 + home_appreciation_rate) ** year)
+                        mr = 0.0
+                        if has_mortgage and mortgage_balance > 0 and year < mortgage_term_years:
+                            mrate = mortgage_rate / 12.0
+                            tot_m = mortgage_term_years * 12.0
+                            elapsed_m = year * 12.0
+                            remain_m = tot_m - elapsed_m
+                            if remain_m > 0:
+                                mpmt = mortgage_balance * mrate / (1.0 - (1.0 + mrate) ** (-tot_m))
+                                mr = mpmt * ((1.0 - (1.0 + mrate) ** (-remain_m)) / mrate)
+                        he = hv - mr
+                        failure_home_equity.append(he)
+                        
                         equities = bonds = cash = 0
                         break
                     
