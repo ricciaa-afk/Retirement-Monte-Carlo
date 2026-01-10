@@ -33,6 +33,44 @@ asset_mix = {
     "cash": cash_pct / 100
 }
 
+# Age-Based Risk Timing
+st.sidebar.subheader("⏳ Age-Based Risk Timing (Optional)")
+use_age_based_risk = st.sidebar.checkbox("Enable Age-Based Risk Timing", value=False,
+    help="Shift to more aggressive allocation if portfolio hits target at specified age")
+
+if use_age_based_risk:
+    st.sidebar.markdown("*Start conservative, shift aggressive if portfolio is healthy at target age*")
+    
+    starting_age = st.sidebar.number_input("Starting Age", min_value=40, max_value=80, value=65, step=1)
+    reallocation_age = st.sidebar.number_input("Reallocation Age", min_value=40, max_value=100, value=75, step=1,
+        help="Age at which to check portfolio and potentially shift to target allocation")
+    reallocation_portfolio_threshold = st.sidebar.number_input("Portfolio Threshold ($)", 
+        min_value=0, max_value=20000000, value=4000000, step=100000,
+        help="If portfolio >= this value at reallocation age, shift to target allocation")
+    
+    st.sidebar.markdown("**Target Allocation (if portfolio >= threshold):**")
+    target_equity_pct = st.sidebar.slider("Target Equities (%)", min_value=0, max_value=100, value=80, key="target_eq")
+    target_bond_pct = st.sidebar.slider("Target Bonds (%)", min_value=0, max_value=100, value=10, key="target_bond")
+    target_cash_pct = st.sidebar.slider("Target Cash (%)", min_value=0, max_value=100, value=10, key="target_cash")
+    
+    target_allocation_total = target_equity_pct + target_bond_pct + target_cash_pct
+    if target_allocation_total != 100:
+        st.sidebar.error(f"⚠️ Target allocation must sum to 100% (currently {target_allocation_total}%)")
+    
+    target_asset_mix = {
+        "equities": target_equity_pct / 100,
+        "bonds": target_bond_pct / 100,
+        "cash": target_cash_pct / 100
+    }
+    
+    reallocation_year = reallocation_age - starting_age
+    st.sidebar.info(f"📅 At age {reallocation_age} (Year {reallocation_year}): if portfolio >= ${reallocation_portfolio_threshold:,.0f}, shift to {target_equity_pct}/{target_bond_pct}/{target_cash_pct}")
+else:
+    starting_age = 65  # Default for display purposes
+    reallocation_year = None
+    reallocation_portfolio_threshold = None
+    target_asset_mix = None
+
 # Returns
 st.sidebar.subheader("💰 Expected Returns (Annual)")
 equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.07, step=0.005, format="%.3f")
@@ -235,20 +273,6 @@ if enable_guardrails:
     
     st.sidebar.markdown("**Defensive Allocation (when triggered):**")
     
-    defensive_equity_pct = st.sidebar.slider("Defensive Equities (%)", min_value=0, max_value=100, value=80, key="def_eq")
-    defensive_bond_pct = st.sidebar.slider("Defensive Bonds (%)", min_value=0, max_value=100, value=0, key="def_bond")
-    defensive_cash_pct = st.sidebar.slider("Defensive Cash (%)", min_value=0, max_value=100, value=20, key="def_cash")
-    
-    defensive_allocation_total = defensive_equity_pct + defensive_bond_pct + defensive_cash_pct
-    if defensive_allocation_total != 100:
-        st.sidebar.error(f"⚠️ Defensive allocation must sum to 100% (currently {defensive_allocation_total}%)")
-    
-    defensive_asset_mix = {
-        "equities": defensive_equity_pct / 100,
-        "bonds": defensive_bond_pct / 100,
-        "cash": defensive_cash_pct / 100
-    }
-    
     recovery_buffer = st.sidebar.slider(
         "Recovery Buffer (%)", 
         min_value=0, 
@@ -438,6 +462,17 @@ if run_simulation and total_allocation == 100:
                     
                     market_index *= (1 + equity_r)
                     market_high = max(market_high, market_index)
+                    
+                    # Age-Based Risk Timing: Check if we should shift allocation
+                    if use_age_based_risk and year == reallocation_year:
+                        current_portfolio = equities + bonds + cash
+                        if current_portfolio >= reallocation_portfolio_threshold:
+                            # Portfolio is healthy - shift to aggressive target allocation
+                            equities = current_portfolio * target_asset_mix['equities']
+                            bonds = current_portfolio * target_asset_mix['bonds']
+                            cash = current_portfolio * target_asset_mix['cash']
+                            # Update ongoing asset mix for future rebalancing
+                            asset_mix = target_asset_mix
                     
                     # Update home value with appreciation
                     current_home_value *= (1 + home_appreciation_rate)
@@ -748,21 +783,14 @@ if run_simulation and total_allocation == 100:
                         total = equities + bonds + cash
                         
                         # Calculate target equity amount based on allocation
-                        if enable_guardrails and guardrails_active:
-                            target_equity_allocation = defensive_asset_mix['equities']
-                        else:
-                            target_equity_allocation = asset_mix['equities']
-                        
+                        target_equity_allocation = asset_mix['equities']
                         target_equity_amount = total * target_equity_allocation
                         
                         # Only rebalance if equities have grown 20% above target
                         # This ensures we only trim gains, not sell during early recovery
                         if equities > target_equity_amount * 1.20:
                             # Rebalance: trim equity gains to restore bonds/cash
-                            if enable_guardrails and guardrails_active:
-                                target_mix = defensive_asset_mix
-                            else:
-                                target_mix = asset_mix
+                            target_mix = asset_mix
                             
                             equities = total * target_mix['equities']
                             bonds = total * target_mix['bonds']
@@ -1479,12 +1507,20 @@ GUARDRAILS:
                 analysis_text += f"""
 - Trigger Threshold: ${guardrail_threshold:,.0f}
 - Spending Reductions: High {high_spend_cut*100:.0f}% / Med {med_spend_cut*100:.0f}% / Low {low_spend_cut*100:.0f}%
-- Defensive Allocation: {defensive_equity_pct}% / {defensive_bond_pct}% / {defensive_cash_pct}%
 - Recovery Buffer: {recovery_buffer*100:.0f}%"""
                 
                 if enable_contingency_income:
                     analysis_text += f"""
 - Contingency Income: ${contingency_income_annual:,.0f}/year (work {contingency_min_years}-{contingency_max_years} years if triggered)"""
+            
+            if use_age_based_risk:
+                analysis_text += f"""
+
+AGE-BASED RISK TIMING:
+- Starting Age: {starting_age}
+- Reallocation Age: {reallocation_age} (Year {reallocation_year})
+- Portfolio Threshold: ${reallocation_portfolio_threshold:,.0f}
+- Target Allocation (if threshold met): {target_equity_pct}% / {target_bond_pct}% / {target_cash_pct}%"""
 
             analysis_text += f"""
 
