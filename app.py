@@ -750,17 +750,30 @@ if run_simulation and total_allocation == 100:
                             equities = total * target_mix['equities']
                             bonds = total * target_mix['bonds']
                             cash = total * target_mix['cash']
-                    
                     if equities + bonds + cash <= 0:
                         success = False
                         failure_years_list.append(year + 1)
-                        # Calculate home equity at failure
-                        try:
-                            home_equity_at_failure = current_home_value - remaining_mortgage_balance
-                            failure_home_equity.append(home_equity_at_failure)
-                        except Exception as e:
-                            # Fallback if variables not available
-                            failure_home_equity.append(0)
+                        
+                        # Calculate home equity at failure - simple direct calculation
+                        # Home value appreciated for 'year' years
+                        failure_home_value = home_value * ((1 + home_appreciation_rate) ** year)
+                        
+                        # Calculate remaining mortgage if applicable
+                        failure_mortgage_remaining = 0
+                        if has_mortgage and mortgage_balance > 0 and year < mortgage_term_years:
+                            # Calculate remaining balance using amortization formula
+                            monthly_rate = mortgage_rate / 12
+                            total_months = mortgage_term_years * 12
+                            months_elapsed = year * 12
+                            months_remaining = total_months - months_elapsed
+                            
+                            if months_remaining > 0:
+                                monthly_payment = mortgage_balance * monthly_rate / (1 - (1 + monthly_rate) ** (-total_months))
+                                # Remaining balance formula
+                                failure_mortgage_remaining = monthly_payment * ((1 - (1 + monthly_rate) ** (-months_remaining)) / monthly_rate)
+                        
+                        home_equity_at_failure = failure_home_value - failure_mortgage_remaining
+                        failure_home_equity.append(home_equity_at_failure)
                         break
                 
                 # Check max consecutive one final time at end
