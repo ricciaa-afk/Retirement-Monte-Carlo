@@ -360,6 +360,9 @@ if run_simulation and total_allocation == 100:
                 bonds = initial_portfolio * asset_mix["bonds"]
                 cash = initial_portfolio * asset_mix["cash"]
                 
+                # Track current allocation (may change during simulation)
+                current_asset_mix = asset_mix.copy()
+                
                 market_index = 1.0
                 market_high = 1.0
                 
@@ -464,12 +467,12 @@ if run_simulation and total_allocation == 100:
                     if use_age_based_risk and year == reallocation_year:
                         current_portfolio = equities + bonds + cash
                         if current_portfolio >= reallocation_portfolio_threshold:
-                            # Portfolio is healthy - shift to aggressive target allocation
+                            # Portfolio is healthy - shift to target allocation
                             equities = current_portfolio * target_asset_mix['equities']
                             bonds = current_portfolio * target_asset_mix['bonds']
                             cash = current_portfolio * target_asset_mix['cash']
-                            # Update ongoing asset mix for future rebalancing
-                            asset_mix = target_asset_mix
+                            # Update THIS simulation's asset mix for future rebalancing
+                            current_asset_mix = target_asset_mix.copy()
                     
                     # Update home value with appreciation
                     current_home_value *= (1 + home_appreciation_rate)
@@ -780,18 +783,16 @@ if run_simulation and total_allocation == 100:
                         total = equities + bonds + cash
                         
                         # Calculate target equity amount based on allocation
-                        target_equity_allocation = asset_mix['equities']
+                        target_equity_allocation = current_asset_mix['equities']
                         target_equity_amount = total * target_equity_allocation
                         
                         # Only rebalance if equities have grown 20% above target
                         # This ensures we only trim gains, not sell during early recovery
                         if equities > target_equity_amount * 1.20:
                             # Rebalance: trim equity gains to restore bonds/cash
-                            target_mix = asset_mix
-                            
-                            equities = total * target_mix['equities']
-                            bonds = total * target_mix['bonds']
-                            cash = total * target_mix['cash']
+                            equities = total * current_asset_mix['equities']
+                            bonds = total * current_asset_mix['bonds']
+                            cash = total * current_asset_mix['cash']
                     
                     if equities + bonds + cash <= 0:
                         success = False
