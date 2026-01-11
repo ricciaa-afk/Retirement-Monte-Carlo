@@ -322,17 +322,14 @@ run_simulation = st.sidebar.button("🚀 Run Simulation", type="primary", use_co
 
 # Main content area
 if run_simulation and total_allocation == 100:
-    if enable_guardrails and defensive_allocation_total != 100:
-        st.error("⚠️ Please ensure defensive allocation sums to 100% before running simulation")
-    else:
-        with st.spinner(f"Running {simulations:,} simulations... This may take a moment..."):
-            
-            np.random.seed(42)
-            
-            final_portfolios = []
-            success_flags = []
-            failure_years_list = []
-            failure_home_equity = []  # Track home equity at failure
+    with st.spinner(f"Running {simulations:,} simulations... This may take a moment..."):
+        
+        np.random.seed(42)
+        
+        final_portfolios = []
+        success_flags = []
+        failure_years_list = []
+        failure_home_equity = []  # Track home equity at failure
             
             years_go = []
             years_slow = []
