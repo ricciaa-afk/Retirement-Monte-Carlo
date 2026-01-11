@@ -330,30 +330,30 @@ if run_simulation and total_allocation == 100:
         success_flags = []
         failure_years_list = []
         failure_home_equity = []  # Track home equity at failure
-            
-            years_go = []
-            years_slow = []
-            years_no = []
-            
-            defensive_years_count = []
-            guardrail_years_count = []
-            total_taxes_paid = []
-            max_consecutive_guardrails = []  # Track longest continuous guardrail period
-            guardrail_patterns = []  # Track year-by-year guardrail status for each sim
-            
-            # Conditional spending tracking
-            if use_conditional_spend:
-                tier_usage_high = []
-                tier_usage_med = []
-                tier_usage_low = []
-                max_consecutive_low_tier = []
-                tier_patterns = []  # Track which tier each year: 1=high, 2=med, 3=low
-            
-            # Lifestyle/spending tracking (actual spending including guardrail cuts)
-            lifestyle_patterns = []  # Track actual spending level each year
-            # Categories: 1=High, 2=High-cut, 3=Med, 4=Med-cut, 5=Low, 6=Low-cut
-            
-            for sim in range(simulations):
+        
+        years_go = []
+        years_slow = []
+        years_no = []
+        
+        defensive_years_count = []
+        guardrail_years_count = []
+        total_taxes_paid = []
+        max_consecutive_guardrails = []  # Track longest continuous guardrail period
+        guardrail_patterns = []  # Track year-by-year guardrail status for each sim
+        
+        # Conditional spending tracking
+        if use_conditional_spend:
+            tier_usage_high = []
+            tier_usage_med = []
+            tier_usage_low = []
+            max_consecutive_low_tier = []
+            tier_patterns = []  # Track which tier each year: 1=high, 2=med, 3=low
+        
+        # Lifestyle/spending tracking (actual spending including guardrail cuts)
+        lifestyle_patterns = []  # Track actual spending level each year
+        # Categories: 1=High, 2=High-cut, 3=Med, 4=Med-cut, 5=Low, 6=Low-cut
+        
+        for sim in range(simulations):
                 
                 # Initialize portfolio buckets
                 equities = initial_portfolio * asset_mix["equities"]
