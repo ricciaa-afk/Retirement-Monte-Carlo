@@ -39,16 +39,16 @@ use_age_based_risk = st.sidebar.checkbox("Enable Age-Based Risk Timing", value=F
     help="Shift to more aggressive allocation if portfolio hits target at specified age")
 
 if use_age_based_risk:
-    st.sidebar.markdown("*Start conservative, shift aggressive if portfolio is healthy at target age*")
+    st.sidebar.markdown("*Start conservative, shift aggressive when portfolio hits target*")
     
     starting_age = st.sidebar.number_input("Starting Age", min_value=40, max_value=80, value=65, step=1)
-    reallocation_age = st.sidebar.number_input("Reallocation Age", min_value=40, max_value=100, value=75, step=1,
-        help="Age at which to check portfolio and potentially shift to target allocation")
+    reallocation_age = st.sidebar.number_input("Check Starting Age", min_value=40, max_value=100, value=75, step=1,
+        help="Age at which to START checking portfolio annually. Will shift when threshold is first met.")
     reallocation_portfolio_threshold = st.sidebar.number_input("Portfolio Threshold ($)", 
         min_value=0, max_value=20000000, value=4000000, step=100000,
-        help="If portfolio >= this value at reallocation age, shift to target allocation")
+        help="When portfolio >= this value, shift to target allocation (checked annually starting at specified age)")
     
-    st.sidebar.markdown("**Target Allocation (if portfolio >= threshold):**")
+    st.sidebar.markdown("**Target Allocation (when threshold met):**")
     target_equity_pct = st.sidebar.slider("Target Equities (%)", min_value=0, max_value=100, value=80, key="target_eq")
     target_bond_pct = st.sidebar.slider("Target Bonds (%)", min_value=0, max_value=100, value=10, key="target_bond")
     target_cash_pct = st.sidebar.slider("Target Cash (%)", min_value=0, max_value=100, value=10, key="target_cash")
@@ -64,7 +64,7 @@ if use_age_based_risk:
     }
     
     reallocation_year = reallocation_age - starting_age
-    st.sidebar.info(f"📅 At age {reallocation_age} (Year {reallocation_year}): if portfolio >= ${reallocation_portfolio_threshold:,.0f}, shift to {target_equity_pct}/{target_bond_pct}/{target_cash_pct}")
+    st.sidebar.info(f"📅 Starting age {reallocation_age} (Year {reallocation_year}): check annually until portfolio >= ${reallocation_portfolio_threshold:,.0f}, then shift to {target_equity_pct}/{target_bond_pct}/{target_cash_pct}")
 else:
     starting_age = 65  # Default for display purposes
     reallocation_year = None
@@ -362,6 +362,7 @@ if run_simulation and total_allocation == 100:
                 
                 # Track current allocation (may change during simulation)
                 current_asset_mix = asset_mix.copy()
+                allocation_shifted = False  # Track if we've already shifted (prevent flip-flopping)
                 
                 market_index = 1.0
                 market_high = 1.0
@@ -464,7 +465,8 @@ if run_simulation and total_allocation == 100:
                     market_high = max(market_high, market_index)
                     
                     # Age-Based Risk Timing: Check if we should shift allocation
-                    if use_age_based_risk and year == reallocation_year:
+                    # Check every year starting at reallocation age, until shift happens
+                    if use_age_based_risk and not allocation_shifted and year >= reallocation_year:
                         current_portfolio = equities + bonds + cash
                         if current_portfolio >= reallocation_portfolio_threshold:
                             # Portfolio is healthy - shift to target allocation
@@ -473,6 +475,7 @@ if run_simulation and total_allocation == 100:
                             cash = current_portfolio * target_asset_mix['cash']
                             # Update THIS simulation's asset mix for future rebalancing
                             current_asset_mix = target_asset_mix.copy()
+                            allocation_shifted = True  # Lock in - don't shift back
                     
                     # Update home value with appreciation
                     current_home_value *= (1 + home_appreciation_rate)
@@ -1516,9 +1519,10 @@ GUARDRAILS:
 
 AGE-BASED RISK TIMING:
 - Starting Age: {starting_age}
-- Reallocation Age: {reallocation_age} (Year {reallocation_year})
+- Check Starting Age: {reallocation_age} (Year {reallocation_year})
 - Portfolio Threshold: ${reallocation_portfolio_threshold:,.0f}
-- Target Allocation (if threshold met): {target_equity_pct}% / {target_bond_pct}% / {target_cash_pct}%"""
+- Target Allocation (when threshold met): {target_equity_pct}% / {target_bond_pct}% / {target_cash_pct}%
+- Logic: Check annually starting at age {reallocation_age}, shift when portfolio first >= threshold"""
 
             analysis_text += f"""
 
