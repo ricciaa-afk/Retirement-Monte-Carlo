@@ -13,15 +13,16 @@ st.sidebar.header("Simulation Settings")
 
 # Basic Parameters
 st.sidebar.subheader("📊 Basic Parameters")
+starting_age = st.sidebar.number_input("Current Age", min_value=40, max_value=80, value=65, step=1)
 years = st.sidebar.number_input("Retirement Duration (years)", min_value=1, max_value=60, value=47)
 simulations = st.sidebar.number_input("Number of Simulations", min_value=100, max_value=50000, value=10000, step=1000)
 initial_portfolio = st.sidebar.number_input("Initial Portfolio ($)", min_value=0, max_value=20000000, value=3900000, step=100000)
 
 # Asset Allocation
 st.sidebar.subheader("📈 Asset Allocation (Normal Mode)")
-equity_pct = st.sidebar.slider("Equities (%)", min_value=0, max_value=100, value=80)
-bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=0)
-cash_pct = st.sidebar.slider("Cash (%)", min_value=0, max_value=100, value=20)
+equity_pct = st.sidebar.slider("Equities (%)", min_value=0, max_value=100, value=70)
+bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=20)
+cash_pct = st.sidebar.slider("Cash (%)", min_value=0, max_value=100, value=10)
 
 total_allocation = equity_pct + bond_pct + cash_pct
 if total_allocation != 100:
@@ -41,8 +42,7 @@ use_age_based_risk = st.sidebar.checkbox("Enable Age-Based Risk Timing", value=F
 if use_age_based_risk:
     st.sidebar.markdown("*Start conservative, shift aggressive when portfolio hits target*")
     
-    starting_age = st.sidebar.number_input("Starting Age", min_value=40, max_value=80, value=65, step=1)
-    reallocation_age = st.sidebar.number_input("Check Starting Age", min_value=40, max_value=100, value=75, step=1,
+    reallocation_age = st.sidebar.number_input("Start Checking at Age", min_value=40, max_value=100, value=75, step=1,
         help="Age at which to START checking portfolio annually. Will shift when threshold is first met.")
     reallocation_portfolio_threshold = st.sidebar.number_input("Portfolio Threshold ($)", 
         min_value=0, max_value=20000000, value=4000000, step=100000,
@@ -66,54 +66,19 @@ if use_age_based_risk:
     reallocation_year = reallocation_age - starting_age
     st.sidebar.info(f"📅 Starting age {reallocation_age} (Year {reallocation_year}): check annually until portfolio >= ${reallocation_portfolio_threshold:,.0f}, then shift to {target_equity_pct}/{target_bond_pct}/{target_cash_pct}")
 else:
-    starting_age = 65  # Default for display purposes
     reallocation_year = None
     reallocation_portfolio_threshold = None
     target_asset_mix = None
 
 # Returns
 st.sidebar.subheader("💰 Expected Returns (Annual)")
-equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.07, step=0.005, format="%.3f")
+equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.06, step=0.005, format="%.3f")
 equity_vol = st.sidebar.slider("Equity Volatility", min_value=0.0, max_value=0.30, value=0.17, step=0.01, format="%.2f")
-bond_return = st.sidebar.slider("Bond Return", min_value=0.0, max_value=0.15, value=0.03, step=0.005, format="%.3f")
-bond_vol = st.sidebar.slider("Bond Volatility", min_value=0.0, max_value=0.15, value=0.06, step=0.01, format="%.2f")
+bond_return = st.sidebar.slider("Bond Return", min_value=0.0, max_value=0.15, value=0.04, step=0.005, format="%.3f")
+bond_vol = st.sidebar.slider("Bond Volatility", min_value=0.0, max_value=0.15, value=0.04, step=0.01, format="%.2f")
 cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, value=0.025, step=0.005, format="%.3f")
 inflation_rate = st.sidebar.slider("Inflation Rate", min_value=0.0, max_value=0.10, value=0.02, step=0.005, format="%.3f")
-inflation_vol = st.sidebar.slider("Inflation Volatility", min_value=0.0, max_value=0.05, value=0.01, step=0.005, format="%.3f", help="Standard deviation of annual inflation")
-
-# Regime-Based Inflation
-st.sidebar.subheader("📊 Inflation Regimes (Optional)")
-use_inflation_regimes = st.sidebar.checkbox("Use Regime-Based Inflation", value=False, help="Model economic cycles with persistent inflation periods")
-
-if use_inflation_regimes:
-    st.sidebar.markdown("*Inflation will shift between distinct economic regimes*")
-    
-    st.sidebar.markdown("**Low Inflation Regime:**")
-    low_inflation_mean = st.sidebar.slider("Low - Mean", min_value=0.0, max_value=0.05, value=0.015, step=0.005, format="%.3f", key="low_mean")
-    low_inflation_vol = st.sidebar.slider("Low - Volatility", min_value=0.0, max_value=0.03, value=0.0075, step=0.0025, format="%.4f", key="low_vol")
-    low_inflation_duration = st.sidebar.slider("Low - Avg Duration (years)", min_value=3, max_value=20, value=8, step=1, key="low_dur")
-    
-    st.sidebar.markdown("**Normal Inflation Regime:**")
-    normal_inflation_mean = st.sidebar.slider("Normal - Mean", min_value=0.0, max_value=0.08, value=0.025, step=0.005, format="%.3f", key="normal_mean")
-    normal_inflation_vol = st.sidebar.slider("Normal - Volatility", min_value=0.0, max_value=0.03, value=0.01, step=0.0025, format="%.4f", key="normal_vol")
-    normal_inflation_duration = st.sidebar.slider("Normal - Avg Duration (years)", min_value=3, max_value=20, value=12, step=1, key="normal_dur")
-    
-    st.sidebar.markdown("**High Inflation Regime:**")
-    high_inflation_mean = st.sidebar.slider("High - Mean", min_value=0.0, max_value=0.15, value=0.05, step=0.005, format="%.3f", key="high_mean")
-    high_inflation_vol = st.sidebar.slider("High - Volatility", min_value=0.0, max_value=0.05, value=0.015, step=0.0025, format="%.4f", key="high_vol")
-    high_inflation_duration = st.sidebar.slider("High - Avg Duration (years)", min_value=3, max_value=20, value=7, step=1, key="high_dur")
-    
-    starting_regime = st.sidebar.selectbox("Starting Regime", ["Normal", "Low", "High"], index=0)
-    
-    # Store regime parameters
-    inflation_regimes = {
-        "Low": {"mean": low_inflation_mean, "vol": low_inflation_vol, "duration": low_inflation_duration},
-        "Normal": {"mean": normal_inflation_mean, "vol": normal_inflation_vol, "duration": normal_inflation_duration},
-        "High": {"mean": high_inflation_mean, "vol": high_inflation_vol, "duration": high_inflation_duration}
-    }
-else:
-    starting_regime = None
-    inflation_regimes = None
+inflation_vol = st.sidebar.slider("Inflation Volatility", min_value=0.0, max_value=0.05, value=0.00, step=0.005, format="%.3f", help="Standard deviation of annual inflation")
 
 # Tax Drag
 st.sidebar.subheader("💸 Tax Drag by Period")
@@ -383,14 +348,6 @@ if run_simulation and total_allocation == 100:
                 current_home_value = home_value
                 remaining_mortgage_balance = mortgage_balance
                 
-                # Inflation regime tracking
-                if use_inflation_regimes:
-                    current_regime = starting_regime
-                    years_in_regime = 0
-                else:
-                    current_regime = None
-                    years_in_regime = 0
-                
                 # Conditional spending tracking
                 if use_conditional_spend:
                     years_high_tier = 0
@@ -413,36 +370,7 @@ if run_simulation and total_allocation == 100:
                 for year in range(years):
                     
                     # Generate variable inflation for this year
-                    if use_inflation_regimes:
-                        # Regime-based inflation with transitions
-                        years_in_regime += 1
-                        
-                        # Check if regime should transition
-                        regime_params = inflation_regimes[current_regime]
-                        expected_duration = regime_params["duration"]
-                        
-                        # Probability of transitioning increases as we exceed expected duration
-                        # Use exponential probability: low chance early, higher chance as time goes on
-                        transition_prob = 1 - np.exp(-years_in_regime / expected_duration)
-                        
-                        if np.random.random() < transition_prob:
-                            # Transition to new regime
-                            # Weighted transitions: 50% Normal, 25% Low, 25% High
-                            regime_weights = {"Normal": 0.5, "Low": 0.25, "High": 0.25}
-                            # But can't transition to current regime
-                            del regime_weights[current_regime]
-                            # Renormalize
-                            total = sum(regime_weights.values())
-                            regime_weights = {k: v/total for k, v in regime_weights.items()}
-                            
-                            current_regime = np.random.choice(list(regime_weights.keys()), p=list(regime_weights.values()))
-                            years_in_regime = 0
-                        
-                        # Generate inflation for this year from current regime
-                        regime_params = inflation_regimes[current_regime]
-                        year_inflation = max(0, np.random.normal(regime_params["mean"], regime_params["vol"]))
-                        
-                    elif inflation_vol > 0:
+                    if inflation_vol > 0:
                         # Simple random inflation
                         year_inflation = max(0, np.random.normal(inflation_rate, inflation_vol))
                     else:
@@ -1429,6 +1357,7 @@ if run_simulation and total_allocation == 100:
 PARAMETERS:
 - Simulations: {simulations:,}
 - Time Horizon: {years} years
+- Current Age: {starting_age}
 - Initial Portfolio: ${initial_portfolio:,.0f}
 - Asset Allocation: {equity_pct}% Equities / {bond_pct}% Bonds / {cash_pct}% Cash
 
@@ -1436,17 +1365,7 @@ MARKET ASSUMPTIONS:
 - Equity Return: {equity_return*100:.1f}% (Volatility: {equity_vol*100:.0f}%)
 - Bond Return: {bond_return*100:.1f}% (Volatility: {bond_vol*100:.0f}%)
 - Cash Return: {cash_return*100:.1f}%
-- Inflation: {inflation_rate*100:.1f}% (Volatility: {inflation_vol*100:.1f}%)"""
-            
-            if use_inflation_regimes:
-                analysis_text += f"""
-- REGIME-BASED INFLATION ENABLED:
-  - Starting Regime: {starting_regime}
-  - Low Regime: {low_inflation_mean*100:.1f}% ± {low_inflation_vol*100:.2f}%, avg {low_inflation_duration} years
-  - Normal Regime: {normal_inflation_mean*100:.1f}% ± {normal_inflation_vol*100:.2f}%, avg {normal_inflation_duration} years
-  - High Regime: {high_inflation_mean*100:.1f}% ± {high_inflation_vol*100:.2f}%, avg {high_inflation_duration} years"""
-            
-            analysis_text += f"""
+- Inflation: {inflation_rate*100:.1f}% (Volatility: {inflation_vol*100:.1f}%)
 - Real Equity Return: {(equity_return - inflation_rate)*100:.1f}%
 
 TAX ASSUMPTIONS:
@@ -1519,7 +1438,7 @@ GUARDRAILS:
 
 AGE-BASED RISK TIMING:
 - Starting Age: {starting_age}
-- Check Starting Age: {reallocation_age} (Year {reallocation_year})
+- Start Checking at Age: {reallocation_age} (Year {reallocation_year})
 - Portfolio Threshold: ${reallocation_portfolio_threshold:,.0f}
 - Target Allocation (when threshold met): {target_equity_pct}% / {target_bond_pct}% / {target_cash_pct}%
 - Logic: Check annually starting at age {reallocation_age}, shift when portfolio first >= threshold"""
@@ -1747,9 +1666,9 @@ else:
     
     **Tax Modeling:**
     Accounts for the fact that early years (taxable accounts, cap gains) are more tax-efficient than later years (RMDs, ordinary income):
-    - High Spend years: Lower tax drag (default 5%)
-    - Medium Spend years: Medium tax drag as RMDs start (default 12%)
-    - Low Spend years: Higher tax drag from larger RMDs (default 15%)
+    - High Spend years: Lower tax drag (default 4%)
+    - Medium Spend years: Medium tax drag as RMDs start (default 5%)
+    - Low Spend years: Higher tax drag from larger RMDs (default 12%)
     
     **Defensive Withdrawal Strategy:**
     When markets drop significantly, the simulator switches to defensive mode:
