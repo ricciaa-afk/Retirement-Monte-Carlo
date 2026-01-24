@@ -13,16 +13,16 @@ st.sidebar.header("Simulation Settings")
 
 # Basic Parameters
 st.sidebar.subheader("📊 Basic Parameters")
-starting_age = st.sidebar.number_input("Current Age", min_value=40, max_value=80, value=65, step=1)
+starting_age = st.sidebar.number_input("Current Age", min_value=40, max_value=80, value=53, step=1)
 years = st.sidebar.number_input("Retirement Duration (years)", min_value=1, max_value=60, value=47)
 simulations = st.sidebar.number_input("Number of Simulations", min_value=100, max_value=50000, value=10000, step=1000)
 initial_portfolio = st.sidebar.number_input("Initial Portfolio ($)", min_value=0, max_value=20000000, value=3900000, step=100000)
 
 # Asset Allocation
 st.sidebar.subheader("📈 Asset Allocation (Normal Mode)")
-equity_pct = st.sidebar.slider("Equities (%)", min_value=0, max_value=100, value=70)
-bond_pct = st.sidebar.slider("Bonds (%)", min_value=0, max_value=100, value=20)
-cash_pct = st.sidebar.slider("Cash (%)", min_value=0, max_value=100, value=10)
+equity_pct = st.sidebar.number_input("Equities (%)", min_value=0, max_value=100, value=70, step=1)
+bond_pct = st.sidebar.number_input("Bonds (%)", min_value=0, max_value=100, value=20, step=1)
+cash_pct = st.sidebar.number_input("Cash (%)", min_value=0, max_value=100, value=10, step=1)
 
 total_allocation = equity_pct + bond_pct + cash_pct
 if total_allocation != 100:
@@ -49,9 +49,9 @@ if use_age_based_risk:
         help="When portfolio >= this value, shift to target allocation (checked annually starting at specified age)")
     
     st.sidebar.markdown("**Target Allocation (when threshold met):**")
-    target_equity_pct = st.sidebar.slider("Target Equities (%)", min_value=0, max_value=100, value=80, key="target_eq")
-    target_bond_pct = st.sidebar.slider("Target Bonds (%)", min_value=0, max_value=100, value=10, key="target_bond")
-    target_cash_pct = st.sidebar.slider("Target Cash (%)", min_value=0, max_value=100, value=10, key="target_cash")
+    target_equity_pct = st.sidebar.number_input("Target Equities (%)", min_value=0, max_value=100, value=80, step=1, key="target_eq")
+    target_bond_pct = st.sidebar.number_input("Target Bonds (%)", min_value=0, max_value=100, value=10, step=1, key="target_bond")
+    target_cash_pct = st.sidebar.number_input("Target Cash (%)", min_value=0, max_value=100, value=10, step=1, key="target_cash")
     
     target_allocation_total = target_equity_pct + target_bond_pct + target_cash_pct
     if target_allocation_total != 100:
@@ -72,19 +72,19 @@ else:
 
 # Returns
 st.sidebar.subheader("💰 Expected Returns (Annual)")
-equity_return = st.sidebar.slider("Equity Return", min_value=0.0, max_value=0.20, value=0.06, step=0.005, format="%.3f")
-equity_vol = st.sidebar.slider("Equity Volatility", min_value=0.0, max_value=0.30, value=0.17, step=0.01, format="%.2f")
-bond_return = st.sidebar.slider("Bond Return", min_value=0.0, max_value=0.15, value=0.04, step=0.005, format="%.3f")
-bond_vol = st.sidebar.slider("Bond Volatility", min_value=0.0, max_value=0.15, value=0.04, step=0.01, format="%.2f")
-cash_return = st.sidebar.slider("Cash Return", min_value=0.0, max_value=0.10, value=0.025, step=0.005, format="%.3f")
-inflation_rate = st.sidebar.slider("Inflation Rate", min_value=0.0, max_value=0.10, value=0.02, step=0.005, format="%.3f")
-inflation_vol = st.sidebar.slider("Inflation Volatility", min_value=0.0, max_value=0.05, value=0.00, step=0.005, format="%.3f", help="Standard deviation of annual inflation")
+equity_return = st.sidebar.number_input("Equity Return (%)", min_value=0.0, max_value=20.0, value=6.0, step=0.25, format="%.2f") / 100
+equity_vol = st.sidebar.number_input("Equity Volatility (%)", min_value=0.0, max_value=30.0, value=17.0, step=0.25, format="%.2f") / 100
+bond_return = st.sidebar.number_input("Bond Return (%)", min_value=0.0, max_value=15.0, value=4.0, step=0.25, format="%.2f") / 100
+bond_vol = st.sidebar.number_input("Bond Volatility (%)", min_value=0.0, max_value=15.0, value=4.0, step=0.25, format="%.2f") / 100
+cash_return = st.sidebar.number_input("Cash Return (%)", min_value=0.0, max_value=10.0, value=2.5, step=0.25, format="%.2f") / 100
+inflation_rate = st.sidebar.number_input("Inflation Rate (%)", min_value=0.0, max_value=10.0, value=2.0, step=0.25, format="%.2f") / 100
+inflation_vol = st.sidebar.number_input("Inflation Volatility (%)", min_value=0.0, max_value=5.0, value=0.0, step=0.25, format="%.2f", help="Standard deviation of annual inflation") / 100
 
 # Tax Drag
 st.sidebar.subheader("💸 Tax Drag by Period")
 st.sidebar.markdown("*Percentage of withdrawals lost to taxes*")
 
-high_spend_tax_drag = st.sidebar.slider(
+high_spend_tax_drag = st.sidebar.number_input(
     "High Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
@@ -93,7 +93,7 @@ high_spend_tax_drag = st.sidebar.slider(
     help="Early years: pulling from taxable accounts, cap gains treatment"
 ) / 100
 
-med_spend_tax_drag = st.sidebar.slider(
+med_spend_tax_drag = st.sidebar.number_input(
     "Medium Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
@@ -102,7 +102,7 @@ med_spend_tax_drag = st.sidebar.slider(
     help="Middle years: RMDs start, mix of account types"
 ) / 100
 
-low_spend_tax_drag = st.sidebar.slider(
+low_spend_tax_drag = st.sidebar.number_input(
     "Low Spend Years Tax Drag (%)", 
     min_value=0, 
     max_value=30, 
@@ -128,9 +128,9 @@ use_conditional_spend = st.sidebar.checkbox("Use Conditional Spending Model", va
 
 if use_conditional_spend:
     st.sidebar.markdown("*Spending tier selected each year based on portfolio health*")
-    discount_rate = st.sidebar.slider("Discount Rate for PV Calculation", 
-        min_value=0.0, max_value=0.10, value=0.04, step=0.005, format="%.3f",
-        help="Rate used to calculate present value of future spending needs. Higher rate = more aggressive spending.")
+    discount_rate = st.sidebar.number_input("Discount Rate for PV Calculation (%)", 
+        min_value=0.0, max_value=10.0, value=4.0, step=0.25, format="%.2f",
+        help="Rate used to calculate present value of future spending needs. Higher rate = more aggressive spending.") / 100
     st.sidebar.info(f"With {inflation_rate*100:.1f}% inflation, this implies {(discount_rate-inflation_rate)*100:.1f}% real discount rate")
 else:
     discount_rate = None
@@ -141,7 +141,7 @@ st.sidebar.subheader("🏠 Mortgage & Home")
 has_mortgage = st.sidebar.checkbox("Include Mortgage", value=True)
 if has_mortgage:
     mortgage_balance = st.sidebar.number_input("Mortgage Balance ($)", min_value=0, max_value=5000000, value=363400, step=10000)
-    mortgage_rate = st.sidebar.slider("Mortgage Rate", min_value=0.0, max_value=0.15, value=0.06, step=0.0025, format="%.4f")
+    mortgage_rate = st.sidebar.number_input("Mortgage Rate (%)", min_value=0.0, max_value=15.0, value=6.0, step=0.25, format="%.2f") / 100
     mortgage_term_years = st.sidebar.number_input("Mortgage Term (years)", min_value=1, max_value=40, value=30)
     
     if mortgage_balance > 0:
@@ -161,18 +161,24 @@ else:
 st.sidebar.markdown("**Home Value:**")
 home_value = st.sidebar.number_input("Current Home Value ($)", min_value=0, max_value=10000000, value=900000, step=50000,
     help="Current market value of home")
-home_appreciation_rate = st.sidebar.slider("Home Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.0, step=0.5,
+home_appreciation_rate = st.sidebar.number_input("Home Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.0, step=0.5, format="%.1f",
     help="Annual appreciation rate for home value") / 100
 
 # Social Security
 st.sidebar.subheader("👴 Social Security")
 has_ss = st.sidebar.checkbox("Include Social Security", value=True)
 if has_ss:
-    ss_monthly = st.sidebar.number_input("SS Monthly Benefit (Today's $)", min_value=0, max_value=10000, value=5088, step=100)
-    ss_start_year = st.sidebar.number_input("SS Start Year", min_value=1, max_value=60, value=17)
+    ss_monthly = st.sidebar.number_input("SS Monthly Benefit (Today's $)", min_value=0, max_value=10000, value=5369, step=100)
+    ss_start_age = st.sidebar.number_input("SS Starting Age", min_value=62, max_value=70, value=70, step=1)
+    ss_start_year = ss_start_age - starting_age
+    if ss_start_year < 0:
+        st.sidebar.warning(f"⚠️ SS starting age ({ss_start_age}) is before current age ({starting_age}). Setting to start immediately.")
+        ss_start_year = 0
+    st.sidebar.info(f"📅 Social Security will start in Year {ss_start_year} (at age {ss_start_age})")
 else:
     ss_monthly = 0
     ss_start_year = 999  # Never starts
+    ss_start_age = 999
 
 # Delayed Retirement Income
 st.sidebar.subheader("💼 Delayed Retirement Income")
@@ -188,8 +194,8 @@ else:
 # Bucket Strategy - Defensive Withdrawal Rules
 st.sidebar.subheader("🛡️ Defensive Withdrawal Strategy")
 st.sidebar.markdown("*Withdraw from cash/bonds first during market downturns*")
-defensive_trigger = st.sidebar.slider("Defensive Trigger (market down %)", min_value=0, max_value=50, value=15, step=5, format="%d%%") / 100
-recovery_threshold = st.sidebar.slider("Recovery Threshold (within % of peak)", min_value=0, max_value=20, value=5, step=1, format="%d%%") / 100
+defensive_trigger = st.sidebar.number_input("Defensive Trigger (market down %)", min_value=0, max_value=50, value=15, step=5) / 100
+recovery_threshold = st.sidebar.number_input("Recovery Threshold (within % of peak)", min_value=0, max_value=20, value=5, step=1) / 100
 
 # Guardrails Strategy
 st.sidebar.subheader("🚨 Dynamic Guardrails Strategy")
@@ -209,7 +215,7 @@ if enable_guardrails:
     
     st.sidebar.markdown("**Spending Reductions (% to CUT):**")
     
-    high_spend_cut = st.sidebar.slider(
+    high_spend_cut = st.sidebar.number_input(
         "High Spend Years Cut (%)", 
         min_value=0, 
         max_value=50, 
@@ -218,7 +224,7 @@ if enable_guardrails:
         help="Percentage reduction in high spend when guardrails active"
     ) / 100
     
-    med_spend_cut = st.sidebar.slider(
+    med_spend_cut = st.sidebar.number_input(
         "Medium Spend Years Cut (%)", 
         min_value=0, 
         max_value=50, 
@@ -227,7 +233,7 @@ if enable_guardrails:
         help="Percentage reduction in medium spend when guardrails active"
     ) / 100
     
-    low_spend_cut = st.sidebar.slider(
+    low_spend_cut = st.sidebar.number_input(
         "Low Spend Years Cut (%)", 
         min_value=0, 
         max_value=50, 
@@ -238,11 +244,12 @@ if enable_guardrails:
     
     st.sidebar.markdown("**Defensive Allocation (when triggered):**")
     
-    recovery_buffer = st.sidebar.slider(
+    recovery_buffer = st.sidebar.number_input(
         "Recovery Buffer (%)", 
         min_value=0, 
         max_value=20, 
         value=5,
+        step=1,
         help="Portfolio must exceed threshold by this % to exit guardrails"
     ) / 100
     
@@ -1663,6 +1670,7 @@ else:
     - Modeling realistic market volatility and drawdowns
     - **Using a defensive bucket strategy during market downturns** to protect against sequence of returns risk
     - **Optional dynamic guardrails** to automatically adjust spending and allocation when portfolio drops
+    - **Optional conditional spending model** for dynamic lifestyle adjustments based on portfolio health
     
     **Tax Modeling:**
     Accounts for the fact that early years (taxable accounts, cap gains) are more tax-efficient than later years (RMDs, ordinary income):
@@ -1682,12 +1690,41 @@ else:
     - When portfolio recovers, resume normal spending and allocation
     - Maximizes flexibility while protecting against failure
     
+    **Conditional Spending Model (Optional):**
+    Instead of following a fixed spending plan (high→medium→low by year), this model dynamically selects your spending tier each year based on portfolio health:
+    
+    *How it works:*
+    1. **Each year, the model calculates the Present Value (PV) of your remaining spending needs** for all three tiers (High/Medium/Low)
+       - Uses the discount rate you specify to calculate what those future needs are worth today
+       - Accounts for inflation, remaining years, Social Security, mortgage payoff, etc.
+    
+    2. **Compares your current portfolio to these PV thresholds:**
+       - If portfolio ≥ PV of High tier needs → Spend at High tier this year
+       - If portfolio ≥ PV of Medium tier needs (but < High) → Spend at Medium tier
+       - If portfolio < PV of Medium tier needs → Spend at Low tier
+    
+    3. **Re-evaluates every single year** based on actual portfolio performance
+       - Good market returns → portfolio grows → may unlock higher spending
+       - Poor market returns → portfolio shrinks → may trigger lower spending
+       - This creates a "dynamic glidepath" that responds to reality
+    
+    *Example:*
+    - You're in Year 5 with 42 years remaining
+    - High tier costs $11,100/month, Medium $9,100/month, Low $8,350/month
+    - At 4% discount rate, the PV of 42 years of high spending = ~$4.5M (simplified)
+    - If your portfolio is $5M → spend High tier this year
+    - If market crashes and portfolio drops to $3.5M next year → automatically switch to Medium or Low tier
+    - If portfolio recovers to $6M later → automatically return to High tier
+    
+    *Key insight:* This model treats your spending tiers as a dynamic menu of options rather than a rigid schedule. It maximizes lifestyle quality when you can afford it, while automatically cutting back when needed to preserve portfolio longevity. The discount rate controls aggressiveness: higher rates make it easier to justify high spending (more "YOLO"), lower rates are more conservative.
+    
     **How to use:**
     1. Adjust parameters in the left sidebar
     2. Set tax drag percentages for each phase
     3. Set your defensive trigger and recovery thresholds
     4. Optionally enable guardrails for dynamic adjustment
-    5. Click "Run Simulation"
-    6. Review results across multiple tabs
-    7. Experiment with different scenarios to test sensitivity
+    5. Optionally enable conditional spending for dynamic tier selection
+    6. Click "Run Simulation"
+    7. Review results across multiple tabs
+    8. Experiment with different scenarios to test sensitivity
     """)
